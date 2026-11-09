@@ -20,7 +20,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 APP_NAME="AutoZ"
-VERSION="${AUTOZ_VERSION:-0.9.0-ru.1}"
+VERSION="${AUTOZ_VERSION:-0.9.0-ru.2}"
 ARCHS="${AUTOZ_ARCHS:-$(uname -m)}"
 HOST_ARCH="$(uname -m)"
 MIN_MACOS="${AUTOZ_MIN_MACOS:-13.0}"

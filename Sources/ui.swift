@@ -56,6 +56,7 @@ protocol AutoZActions: AnyObject {
     func azCheckAndSync()
     func azCheckOnly()
     func azRestoreHome()
+    func azSetDisplayZone(_ id: String)
     func azSetHomeZone(_ id: String)
     func azSetAutoHome(_ on: Bool)
     func azSetShowSeconds(_ on: Bool)
@@ -787,11 +788,11 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
     // MARK: 时区同步的状态表
 
     /// 状态表四行，口径与菜单顶部状态区**共用同一批纯函数**（zoneCNName / zoneChipText /
-    /// zonedDateText / zonedClockText / beijingDeltaShort），免得两处各写一份而漂移。
+    /// zonedDateText / zonedClockText / zoneDeltaShort），免得两处各写一份而漂移。
     private func makeStatusTable() -> AZKVTable {
         let store = Store.shared
         let now = Date()
-        let bj = beijingZone()
+        let bj = displayTimeZone()
         let sys = systemTimeZone()
         let differs = sys.secondsFromGMT(for: now) != bj.secondsFromGMT(for: now)
 
@@ -799,7 +800,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         let t1 = AZTimeCell(zone: bj)
         let r1 = AZKVTable.Row("Часы в меню",
                                zoneCell(name: localizedZoneName(bj), chip: zoneChipText(bj, at: now),
-                                        kind: .accent, sub: K.beijingID),
+                                        kind: .accent, sub: store.displayZone),
                                time: t1)
 
         // 2. 实际时区：系统当前时区
@@ -873,7 +874,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         s.spacing = 9
         s.translatesAutoresizingMaskIntoConstraints = false
         if differs {
-            let delta = NSTextField(labelWithString: beijingDeltaShort(system, at: now))
+            let delta = NSTextField(labelWithString: zoneDeltaShort(system, at: now))
             delta.font = Theme.mono11
             delta.textColor = .secondaryLabelColor
             var views: [NSView] = [AZPill("Есть", .accent), delta]
@@ -881,7 +882,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
             // 快照可能被跟随功能自己写脏，拿它当恢复目标会把人送回代理时区。
             let home = Store.shared.homeZone
             let b = button("Вернуть домашний пояс", #selector(restore(_:)))
-            b.toolTip = "Установить домашний часовой пояс \(home)и отключить синхронизацию"
+            b.toolTip = "Установить домашний часовой пояс \(home) и отключить синхронизацию"
             views.append(b)
             s.setViews(views, in: .leading)
         } else {
@@ -999,12 +1000,20 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
     }
 
     private func sectionMenuBarCard() -> AZCard {
+        let zone = displayTimeZone()
+        let label = NSTextField(labelWithString: zoneLineText(zone))
+        label.lineBreakMode = .byTruncatingTail
+        label.toolTip = Store.shared.displayZone
+        let zoneRow = vrow("Пояс часов", hstack([label, button("Изменить…", #selector(pickDisplayZone(_:)))]))
         let secSwitch = NSButton(checkboxWithTitle: "Показывать секунды в строке меню",
                                  target: self, action: #selector(toggleSeconds(_:)))
         secSwitch.state = Store.shared.showSeconds ? .on : .off
-        return AZCard([secSwitch,
-                       caption("Формат часов совпадает с системным (например, «сб, 3 окт., 08:18»)."
-                               + " При отличии от системного пояса часы становятся оранжевыми.")])
+        let card = AZCard([zoneRow,
+                       caption("Выберите часовой пояс для часов в меню, например Europe/Istanbul. Этот выбор сохраняется после перезапуска и не меняет системный часовой пояс."),
+                       secSwitch,
+                       caption("Формат часов совпадает с системным. При отличии от системного пояса часы становятся оранжевыми.")])
+        card.stretch(zoneRow)
+        return card
     }
 
     private func sectionLoginCard() -> AZCard {
@@ -1088,7 +1097,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
             ("Документация", mono("README.md (на русском)")),
         ]
         var content: [NSView] = [
-            caption("Часы в меню показывают пекинское время (UTC+8). Синхронизация меняет системный пояс по внешнему IP"
+            caption("Часы в меню показывают время выбранного часового пояса. Синхронизация меняет системный пояс по внешнему IP"
                     + " и отключает автоматический выбор пояса macOS. Домашний пояс можно вернуть одной кнопкой. При использовании VPN или прокси"
                     + " определяется местоположение сервера."),
             hrule(),
@@ -1188,10 +1197,23 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
     // MARK: 归位时区
 
     /// 选归位时区：可输入筛选的 IANA 标识列表（全量 400+，靠输入缩小范围，不用笨重下拉）。
-    /// 条目文本与解析分别用 `homeZonePickerItem` / `zoneIDFromPickerInput`（纯函数，可自测）。
+    /// 条目文本与解析分别用 `zonePickerItem` / `zoneIDFromPickerInput`（纯函数，可自测）。
     private func chooseHomeZone() {
-        let current = Store.shared.homeZone
-        let items = TimeZone.knownTimeZoneIdentifiers.sorted().map { homeZonePickerItem($0) }
+        if let id = chooseZone(title: "Домашний пояс", current: Store.shared.homeZone,
+                               explanation: "Этот пояс возвращается при отключении синхронизации и выходе, если включён автовозврат.") {
+            actions?.azSetHomeZone(id)
+        }
+    }
+
+    func chooseDisplayZone() {
+        if let id = chooseZone(title: "Часовой пояс часов", current: Store.shared.displayZone,
+                               explanation: "Часы в меню будут показывать время этого пояса. Системный часовой пояс не изменится.") {
+            actions?.azSetDisplayZone(id)
+        }
+    }
+
+    private func chooseZone(title: String, current: String, explanation: String) -> String? {
+        let items = TimeZone.knownTimeZoneIdentifiers.sorted().map { zonePickerItem($0) }
 
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 96))
         let hint = NSTextField(labelWithString: "Введите часть названия (moscow / tokyo / los) или выберите из списка:")
@@ -1204,10 +1226,10 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         combo.completes = true
         combo.numberOfVisibleItems = 12
         combo.addItems(withObjectValues: items)
-        combo.stringValue = homeZonePickerItem(current)
+        combo.stringValue = zonePickerItem(current)
         combo.frame = NSRect(x: 0, y: 44, width: 600, height: 26)
 
-        let note = NSTextField(wrappingLabelWithString: "Этот пояс возвращается при отключении синхронизации и выходе, если включён автовозврат.")
+        let note = NSTextField(wrappingLabelWithString: explanation)
         note.font = .systemFont(ofSize: 11)
         note.textColor = .tertiaryLabelColor
         note.frame = NSRect(x: 0, y: 2, width: 600, height: 32)
@@ -1217,14 +1239,14 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         host.addSubview(note)
 
         let a = NSAlert()
-        a.messageText = "Домашний пояс"
-        a.informativeText = "Сейчас: \(homeZonePickerItem(current))"
+        a.messageText = title
+        a.informativeText = "Сейчас: \(zonePickerItem(current))"
         a.addButton(withTitle: "Сохранить")
         a.addButton(withTitle: "Отмена")
         a.accessoryView = host
         a.window.initialFirstResponder = combo
 
-        guard a.runModal() == .alertFirstButtonReturn else { return }
+        guard a.runModal() == .alertFirstButtonReturn else { return nil }
         guard let id = zoneIDFromPickerInput(combo.stringValue) else {
             let bad = NSAlert()
             bad.messageText = "Часовой пояс не распознан"
@@ -1232,9 +1254,9 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
                 + "Введите идентификатор IANA (например, Europe/Moscow) или уточните запрос."
             bad.addButton(withTitle: "Понятно")
             bad.runModal()
-            return
+            return nil
         }
-        actions?.azSetHomeZone(id)
+        return id
     }
 
     // MARK: 动作转发（界面层不碰业务，全部交回 AppDelegate）
@@ -1245,6 +1267,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
     @objc private func checkOnly(_ sender: Any)    { actions?.azCheckOnly() }
     @objc private func restore(_ sender: Any)      { actions?.azRestoreHome() }
     @objc private func pickHomeZone(_ sender: Any) { chooseHomeZone() }
+    @objc private func pickDisplayZone(_ sender: Any) { chooseDisplayZone() }
     @objc private func toggleAutoHome(_ sender: Any) {
         actions?.azSetAutoHome((sender as? NSButton)?.state == .on)
     }

@@ -1,16 +1,7 @@
-// AutoZ — 菜单栏「东八区时钟 + 出口 IP 时区同步」
-//
-// 设计要点：
-//   1. 菜单栏标题永远是东八区（Asia/Shanghai）时间，格式**跟随系统菜单栏时钟**
-//      （日期 + 星期 + 时间，zh_CN 下即「9月23日 周三 10:04」），12/24 小时偏好一并继承；
-//      字号也用系统菜单栏的 13pt，和系统时钟并排看不出差别。
-//      （曾前置过一个「◷」标识符，但它笔画太细、在菜单栏里几乎看不见，已去掉。）
-//   2. 当「菜单栏显示的时间」与「系统当前时区的时间」不一致时，标题变橙 —— 一眼看出看到的不是本机时区。
-//   3. 时区同步：拉取 ipinfo.io/json → 解析 IANA 时区 → 写入系统时区 + 关闭「自动设置时区」。
-//   4. 关闭开关时恢复开启前的系统时区与自动时区设置（可逆）。
-//   5. 菜单主次：顶部状态 3~5 行 → 两个主操作（加粗：开启同步 / 恢复开启前状态）→
-//      免授权模式状态 → 其余全部收进「更多」子菜单。菜单是数据驱动的（Row 模型 → 渲染），
-//      所以可以用 `AutoZ --menu` 把菜单结构打成文本审查，不必靠肉眼点。
+// AutoZ — выбранный часовой пояс в строке меню и системный пояс по внешнему IP.
+// displayZone хранит выбор часов независимо от homeZone и системной синхронизации.
+// Заголовок, подсказка, статусная таблица и разница во времени используют displayTimeZone().
+// Формат заголовка следует системному формату; оранжевый цвет означает отличие от системного времени.
 //
 // 改时区（关键约束）：
 //   macOS 不存在「当前进程直接变 root」的 API —— 这是刻意的安全边界。能改系统时区的只有 root
@@ -52,7 +43,7 @@ enum K {
     static let version: String = {
         if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
            !v.isEmpty { return v }
-        return "0.9.0-ru.1"
+        return "0.9.0-ru.2"
     }()
     static let logPath     = NSHomeDirectory() + "/Library/Logs/AutoZ.log"
     static let appSupport  = NSHomeDirectory() + "/Library/Application Support/AutoZ"
@@ -77,7 +68,7 @@ let appDisplayName: String =
         .flatMap { $0.isEmpty ? nil : $0 } ?? "AutoZ — часовые пояса"
 
 /// 一句话定位，避免同一句话散落在多个界面里各自漂移。
-let appTagline = "Пекинское время в меню · Системный часовой пояс по IP"
+let appTagline = "Выбранный часовой пояс в меню · Системный часовой пояс по IP"
 
 /// 菜单栏标题字体。
 ///
@@ -961,6 +952,10 @@ func applySystemZone(_ zoneID: String, autoTZ: Bool? = nil) -> ApplyOutcome {
 
 // MARK: - 时间格式
 
+func displayTimeZone() -> TimeZone {
+    TimeZone(identifier: Store.shared.displayZone) ?? beijingZone()
+}
+
 func beijingZone() -> TimeZone {
     TimeZone(identifier: K.beijingID) ?? TimeZone(secondsFromGMT: 8 * 3600)!
 }
@@ -1025,26 +1020,26 @@ func uiFormatter(pattern: String, zone: TimeZone) -> DateFormatter {
     return f
 }
 
-/// 菜单栏标题文本（东八区）：日期 + 星期 + 时间。**跟随系统**，不固定 locale。
-func beijingTimeText(showSeconds: Bool) -> String {
-    formatter(pattern: titlePattern(showSeconds: showSeconds), zone: beijingZone()).string(from: Date())
+/// Время выбранного пояса в строке меню, в системном формате.
+func displayTimeText(showSeconds: Bool, at date: Date = Date(), zone: TimeZone = displayTimeZone()) -> String {
+    formatter(pattern: titlePattern(showSeconds: showSeconds), zone: zone).string(from: date)
 }
 
-/// 仅时间（东八区），菜单状态行里用
-func beijingClockText(showSeconds: Bool) -> String {
+/// Время выбранного пояса для статусной строки меню.
+func displayClockText(showSeconds: Bool, at date: Date = Date(), zone: TimeZone = displayTimeZone()) -> String {
     let p = uiPattern("jmm" + (showSeconds ? "ss" : ""), fallback: showSeconds ? "HH:mm:ss" : "HH:mm")
-    return uiFormatter(pattern: p, zone: beijingZone()).string(from: Date())
+    return uiFormatter(pattern: p, zone: zone).string(from: date)
 }
 
-func beijingDateText() -> String {
+func displayDateText(at date: Date = Date(), zone: TimeZone = displayTimeZone()) -> String {
     uiFormatter(pattern: uiPattern("yMMMdEEE", fallback: "EEE, d MMM yyyy"),
-                zone: beijingZone()).string(from: Date())
+                zone: zone).string(from: date)
 }
 
-/// 显示的东八区时间是否与系统当前时区「不是同一时刻的表盘」
+/// Отличается ли выбранное время от системного в текущий момент.
 func isOffSystemZone() -> Bool {
-    let sys = TimeZone.current
-    return sys.secondsFromGMT(for: Date()) != beijingZone().secondsFromGMT(for: Date())
+    let sys = systemTimeZone()
+    return sys.secondsFromGMT(for: Date()) != displayTimeZone().secondsFromGMT(for: Date())
 }
 
 // MARK: - 时区标识（当地时间 / 字母缩写 / UTC 偏移）
@@ -1084,22 +1079,23 @@ func zonedTimeText(_ tz: TimeZone, showSeconds: Bool, at date: Date = Date()) ->
     formatter(pattern: titlePattern(showSeconds: showSeconds), zone: tz).string(from: date)
 }
 
-/// 相对东八区的时差："比东八区晚 15 小时" / "比东八区早 30 分" / "与东八区一致"
-func beijingDeltaText(_ tz: TimeZone, at date: Date = Date()) -> String {
-    let mins = (tz.secondsFromGMT(for: date) - beijingZone().secondsFromGMT(for: date)) / 60
-    if mins == 0 { return "Совпадает с UTC+8" }
+/// Разница во времени относительно выбранного пояса часов.
+func zoneDeltaText(_ tz: TimeZone, relativeTo reference: TimeZone = displayTimeZone(), at date: Date = Date()) -> String {
+    let mins = (tz.secondsFromGMT(for: date) - reference.secondsFromGMT(for: date)) / 60
+    let referenceName = utcOffsetText(seconds: reference.secondsFromGMT(for: date))
+    if mins == 0 { return "Совпадает с \(referenceName)" }
     let a = abs(mins), h = a / 60, m = a % 60
     var amount = ""
     if h > 0 { amount += "\(h) ч" }
     if m > 0 { amount += (h > 0 ? " " : "") + "\(m) мин" }
-    return (mins > 0 ? "Впереди UTC+8 на " : "Позади UTC+8 на ") + amount
+    return (mins > 0 ? "Впереди \(referenceName) на " : "Позади \(referenceName) на ") + amount
 }
 
 /// 相对东八区的时差，**紧凑写法**：`-15h` / `+1h` / `-2.5h`；一致时返回空串。
 /// 只出现在「是否有差别」这一行（2026-10-02 用户要求：别散在时区行的小字里，
 /// 把时区行留给"哪个区 + 几点"）。
-func beijingDeltaShort(_ tz: TimeZone, at date: Date = Date()) -> String {
-    let mins = (tz.secondsFromGMT(for: date) - beijingZone().secondsFromGMT(for: date)) / 60
+func zoneDeltaShort(_ tz: TimeZone, relativeTo reference: TimeZone = displayTimeZone(), at date: Date = Date()) -> String {
+    let mins = (tz.secondsFromGMT(for: date) - reference.secondsFromGMT(for: date)) / 60
     if mins == 0 { return "" }
     let sign = mins < 0 ? "-" : "+"
     let a = Double(abs(mins)) / 60
@@ -1152,7 +1148,7 @@ func exitZoneSuffix(exitZone: TimeZone, systemZone: TimeZone, at date: Date = Da
 }
 
 /// 归位时区选择器里的条目文本：「Asia/Shanghai    中国标准时间 · CST · UTC+8」
-func homeZonePickerItem(_ id: String, at date: Date = Date()) -> String {
+func zonePickerItem(_ id: String, at date: Date = Date()) -> String {
     guard let tz = TimeZone(identifier: id) else { return id }
     return "\(id)    \(zoneLineText(tz, at: date))"
 }
@@ -1216,11 +1212,11 @@ func runTZSelfTest() -> Int {
         ("Asia/Tokyo", winter, "Впереди UTC+8 на 1 ч"),
         ("Asia/Shanghai", winter, "Совпадает с UTC+8"),
         ("Asia/Kolkata", winter, "Позади UTC+8 на 2 ч 30 мин")
-    ] { eq(id, beijingDeltaText(tz(id), at: date), expected) }
+    ] { eq(id, zoneDeltaText(tz(id), relativeTo: beijingZone(), at: date), expected) }
     for (id, date, expected) in [
         ("America/Los_Angeles", summer, "-15h"), ("America/Los_Angeles", winter, "-16h"),
         ("Asia/Tokyo", winter, "+1h"), ("Asia/Kolkata", winter, "-2.5h"), ("Asia/Shanghai", winter, "")
-    ] { eq("Краткая разница: \(id)", beijingDeltaShort(tz(id), at: date), expected) }
+    ] { eq("Краткая разница: \(id)", zoneDeltaShort(tz(id), relativeTo: beijingZone(), at: date), expected) }
 
     print("── Местное время, русские даты и названия ──")
     let bj = zonedTimeText(beijingZone(), showSeconds: false, at: winter)
@@ -1244,16 +1240,50 @@ func runTZSelfTest() -> Int {
     let date = zonedDateText(beijingZone(), at: winter)
     yes("Дата на русском", date.contains("янв") && date.contains("15"), date)
 
+    print("── Выбранный пояс часов ──")
+    let suiteName = "autoz.selftest.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let isolated = Store(defaults: defaults)
+    let previousHome = isolated.homeZone
+    let previousSync = isolated.syncEnabled
+    eq("Прежний пояс сохранён по умолчанию", isolated.displayZone, K.beijingID)
+    isolated.displayZone = "Europe/Istanbul"
+    eq("Выбор сохраняется в настройках", Store(defaults: defaults).displayZone, "Europe/Istanbul")
+    eq("Домашний пояс независим от часов", isolated.homeZone, previousHome)
+    yes("Синхронизация не включается при выборе часов", isolated.syncEnabled == previousSync)
+    isolated.displayZone = "Nope/Nowhere"
+    eq("Неверный пояс не заменяет выбранный", isolated.displayZone, "Europe/Istanbul")
+    defaults.set("../../etc/passwd", forKey: "displayZone")
+    eq("Повреждённая настройка безопасно откатывается", isolated.displayZone, K.beijingID)
+    for (id, date, expected) in [
+        ("Europe/Istanbul", winter, "15:00:00"), ("Europe/Istanbul", summer, "15:00:00"),
+        ("America/New_York", winter, "07:00:00"), ("America/New_York", summer, "08:00:00"),
+        ("Asia/Kolkata", winter, "17:30:00")
+    ] {
+        eq("Часы: \(id)", displayClockText(showSeconds: true, at: date, zone: tz(id)), expected)
+        eq("Заголовок: \(id)", displayTimeText(showSeconds: true, at: date, zone: tz(id)),
+           zonedTimeText(tz(id), showSeconds: true, at: date))
+    }
+    eq("Разница относительно Турции", zoneDeltaShort(tz("Asia/Kolkata"), relativeTo: tz("Europe/Istanbul"), at: winter), "+2.5h")
+    eq("Совпадающие пояса", zoneDeltaText(tz("Europe/Moscow"), relativeTo: tz("Europe/Istanbul"), at: winter), "Совпадает с UTC+3")
+    eq("Выбор Istanbul", zoneIDFromPickerInput("istanbul") ?? "nil", "Europe/Istanbul")
+    let late = Date(timeIntervalSince1970: 1768519800) // 2026-01-15 23:30 UTC
+    eq("Дата часов после полуночи в Турции", displayDateText(at: late, zone: tz("Europe/Istanbul")),
+       uiFormatter(pattern: uiPattern("yMMMdEEE", fallback: "EEE, d MMM yyyy"), zone: tz("Europe/Istanbul")).string(from: late))
+    yes("Турция показывает следующий день", displayDateText(at: late, zone: tz("Europe/Istanbul")).contains("16 янв"))
+    yes("Нью-Йорк показывает предыдущий день", displayDateText(at: late, zone: tz("America/New_York")).contains("15 янв"))
+
     print("── Меню и домашний пояс ──")
     let lines = AppDelegate().menuPreviewText().components(separatedBy: "\n")
     func lineHas(_ key: String, _ pattern: String) -> Bool {
         guard let line = lines.first(where: { $0.contains(key) }) else { return false }
         return line.range(of: pattern, options: .regularExpression) != nil
     }
-    yes("UTC+8 содержит время", lineHas("UTC+8", #"\d{1,3}:\d{2}:\d{2}"#))
+    yes("Часы содержат время", lineHas("Часы  ", #"\d{1,3}:\d{2}:\d{2}"#))
     yes("Системный пояс содержит UTC", lineHas("Системный пояс", #"·\s*UTC([+-]\d+(:\d{2})?)?"#))
     yes("Системный пояс содержит местное время", lineHas("Системный пояс", #"\d{1,3}:\d{2}:\d{2}"#))
-    if systemTimeZone().secondsFromGMT(for: Date()) != beijingZone().secondsFromGMT(for: Date()) {
+    if systemTimeZone().secondsFromGMT(for: Date()) != displayTimeZone().secondsFromGMT(for: Date()) {
         yes("Системный пояс содержит разницу", lineHas("Системный пояс", #"[+-]\d+(\.\d+)?h"#))
     }
     let homeID = Store.shared.homeZone
@@ -1263,7 +1293,7 @@ func runTZSelfTest() -> Int {
     yes("Возврат домашнего пояса есть в меню", !homeLine.isEmpty)
     yes("Меню содержит название домашнего пояса", homeLine.contains(homeTZ.map { localizedZoneName($0) } ?? homeID))
     yes("Нет старого возврата к снимку", !lines.contains { $0.contains("Восстановить пояс до включения") })
-    let item = homeZonePickerItem("Asia/Shanghai")
+    let item = zonePickerItem("Asia/Shanghai")
     eq("Выбранная строка → IANA", zoneIDFromPickerInput(item) ?? "nil", "Asia/Shanghai")
     eq("Часть названия → IANA", zoneIDFromPickerInput("shanghai") ?? "nil", "Asia/Shanghai")
     eq("Moscow → IANA", zoneIDFromPickerInput("moscow") ?? "nil", "Europe/Moscow")
@@ -1280,7 +1310,22 @@ func runTZSelfTest() -> Int {
 
 final class Store {
     static let shared = Store()
-    private let d = UserDefaults.standard
+    private let d: UserDefaults
+
+    init(defaults: UserDefaults = .standard) { d = defaults }
+
+    /// Пояс часов независим от системного и домашнего поясов.
+    /// Существующий вид часов сохраняется, пока пользователь не выберет другой пояс.
+    var displayZone: String {
+        get {
+            guard let id = d.string(forKey: "displayZone"), isValidZoneID(id) else { return K.beijingID }
+            return id
+        }
+        set {
+            guard isValidZoneID(newValue) else { return }
+            d.set(newValue, forKey: "displayZone")
+        }
+    }
 
     var syncEnabled: Bool {
         get { d.bool(forKey: "syncEnabled") }
@@ -1538,7 +1583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let showSec = store.showSeconds
         // 标题就是纯时间。早先前置过一个「◷」标识符，但它笔画极细、在菜单栏里几乎看不见，
         // 起不到辨识作用反而显脏，已去掉。
-        let text = beijingTimeText(showSeconds: showSec)
+        let text = displayTimeText(showSeconds: showSec)
         let off = isOffSystemZone()
         // 不一致时标橙色而不是纯红：红色在彩色壁纸和深色菜单栏上容易过冲发闷，
         // 橙色同样一眼看得出「这不是本机时间」，又没那么刺眼。
@@ -1561,9 +1606,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func tooltipText() -> String {
         let sys = systemZoneID()
         let sysTZ = systemTimeZone()
-        var lines = ["UTC+8 (\(K.beijingID))\(beijingTimeText(showSeconds: true))"]
+        var lines = ["Часы: \(Store.shared.displayZone) · \(zoneBadge(displayTimeZone())) · \(displayTimeText(showSeconds: true))"]
         lines.append("Системный пояс: \(sys.isEmpty ? "неизвестно" : sys)   \(zoneBadge(sysTZ))")
-        lines.append("Местное время: \(zonedTimeText(sysTZ, showSeconds: true))   \(beijingDeltaText(sysTZ))")
+        lines.append("Местное время: \(zonedTimeText(sysTZ, showSeconds: true))   \(zoneDeltaText(sysTZ))")
         if isOffSystemZone() {
             lines.append("⚠️ Часы показывают время другого часового пояса")
         }
@@ -1618,13 +1663,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var rows: [MRow] = []
 
         // ── 1. 状态三行，口径与高级配置窗口的状态表**共用同一批纯函数**
-        //    （zoneLineText / zonedClockText / zonedDateText / beijingDeltaShort），
+        //    （zoneLineText / zonedClockText / zonedDateText / zoneDeltaShort），
         //    免得两处各写一份而慢慢漂移。
         //    每行都带上「哪个区 + 几点几分 + 哪天」—— 只给 America/Los_Angeles
         //    这种名字等于没给参考，用户还得自己换算。
-        rows.append(.info("UTC+8  \(beijingClockText(showSeconds: true))   \(zonedDateText(beijingZone(), at: now))", .strong))
+        rows.append(.info("Часы  \(zoneLineText(displayTimeZone(), at: now))   \(displayClockText(showSeconds: true))   \(zonedDateText(displayTimeZone(), at: now))", .strong))
         //    系统时区与出口时区**不可合并**：同步生效时两者相同，关掉同步就会分叉，都要留。
-        let delta = beijingDeltaShort(sysTZ, at: now)
+        let delta = zoneDeltaShort(sysTZ, at: now)
         rows.append(.info("Системный пояс  \(zoneLineText(sysTZ, at: now))"
                           + "   \(zonedClockText(sysTZ, at: now))   \(zonedDateText(sysTZ, at: now))"
                           + (delta.isEmpty ? "" : "   \(delta)"), .info))
@@ -1666,6 +1711,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         rows.append(.sep)
 
         // ── 3. 其余一切（关于、显示、通道、助手、诊断…）都在高级配置窗口里，菜单不再堆子菜单
+        rows.append(.action(title: "Часовой пояс часов…", sel: #selector(chooseDisplayZone(_:)),
+                            enabled: true, checked: false, style: .normal,
+                            tip: "Выбрать время для часов в меню"))
         rows.append(.action(title: "Настройки…", sel: #selector(showConsole(_:)),
                             enabled: true, checked: false, style: .normal,
                             tip: "Часы в меню, авторизация, установка и удаление помощника, диагностика и сведения о программе"))
@@ -2048,7 +2096,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var out: [String] = []
         out.append("AutoZ \(K.version) Диагностика  \(stamp(Date()))")
         out.append("Версия macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
-        out.append("Часы в меню (UTC+8): \(beijingTimeText(showSeconds: store.showSeconds))")
+        out.append("Пояс часов: \(store.displayZone)")
+        out.append("Часы в меню: \(displayTimeText(showSeconds: store.showSeconds))")
         out.append("Шаблон часов: \(titlePattern(showSeconds: store.showSeconds))  (формат системных часов)")
         out.append("Шаблон времени: \(clockPattern(showSeconds: store.showSeconds))  секунды=\(store.showSeconds)")
         out.append("Системный пояс: \(systemZoneID())")
@@ -2073,6 +2122,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             out.append("Источник проверки: нет")
         }
         return out.joined(separator: "\n")
+    }
+
+    @objc private func chooseDisplayZone(_ sender: Any?) {
+        AdvancedWindowController.shared.chooseDisplayZone()
     }
 
     @objc private func showConsole(_ sender: Any?) {
@@ -2232,9 +2285,10 @@ func runCLI(_ args: [String]) -> Int32 {
         pr("Секунды:        \(Store.shared.showSeconds)")
         pr("Шаблон часов:      \(titlePattern(showSeconds: Store.shared.showSeconds))   ← формат системных часов")
         pr("Шаблон времени:      \(clockPattern(showSeconds: Store.shared.showSeconds))")
-        pr("Текст часов:      \(beijingTimeText(showSeconds: Store.shared.showSeconds))")
-        pr("Время с секундами:    \(beijingClockText(showSeconds: true))")
-        pr("Дата UTC+8:    \(beijingDateText())")
+        pr("Текст часов:      \(displayTimeText(showSeconds: Store.shared.showSeconds))")
+        pr("Время с секундами:    \(displayClockText(showSeconds: true))")
+        pr("Пояс часов: \(Store.shared.displayZone)")
+        pr("Дата:    \(displayDateText())")
         pr("Отличается от системы:  \(isOffSystemZone() ? "да (оранжевые часы)" : "нет (обычный цвет)")")
         return 0
 
@@ -2405,7 +2459,7 @@ func runCLI(_ args: [String]) -> Int32 {
           AutoZ --apply          Определить и применить часовой пояс по IP
           AutoZ --set <zone>     Установить пояс IANA (например, Europe/Moscow)
           AutoZ --system         Показать системный пояс и автовыбор пояса
-          AutoZ --format         Показать формат и текст часов UTC+8
+          AutoZ --format         Показать формат, пояс и текст часов
           AutoZ --menu           Показать структуру меню
           AutoZ --tz-selftest    Проверить часовые пояса и русский интерфейс без изменения системы
           AutoZ --plan [zone]    Показать план смены пояса без выполнения
@@ -2499,6 +2553,14 @@ extension AppDelegate: AutoZActions {
     func azRestoreHome()     { restoreHome(NSMenuItem()) }
     func azSetHomeZone(_ id: String) { setHomeZone(id) }
 
+    func azSetDisplayZone(_ id: String) {
+        guard isValidZoneID(id), store.displayZone != id else { return }
+        store.displayZone = id
+        log("Пояс часов в меню → \(id)")
+        lastTitle = ""
+        refresh()
+    }
+
     func azSetAutoHome(_ on: Bool) {
         guard store.autoHome != on else { return }
         setAutoHome(on)
@@ -2516,7 +2578,7 @@ extension AppDelegate: AutoZActions {
     func azSetLaunchAtLogin(_ on: Bool) {
         if let err = LoginItem.set(on) {
             log("Не удалось изменить автозапуск (\(on ? "вкл." : "выкл.")): \(err)")
-            notify(title: "АвтозапускОшибка установки пояса", message: err, sound: "Basso")
+            notify(title: "Ошибка настройки автозапуска", message: err, sound: "Basso")
         } else {
             log("Автозапуск → \(LoginItem.statusText)")
             notify(title: on ? "Автозапуск включён" : "Автозапуск выключен", message: LoginItem.statusText)
