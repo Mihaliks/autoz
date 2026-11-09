@@ -20,7 +20,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 APP_NAME="AutoZ"
-VERSION="${AUTOZ_VERSION:-0.9.0}"
+VERSION="${AUTOZ_VERSION:-0.9.0-ru.1}"
 ARCHS="${AUTOZ_ARCHS:-$(uname -m)}"
 HOST_ARCH="$(uname -m)"
 MIN_MACOS="${AUTOZ_MIN_MACOS:-13.0}"
@@ -29,24 +29,24 @@ APP="$DIST/$APP_NAME.app"
 BUILD="$ROOT/build"
 BUNDLE_ID="cn.y10n.autoz"
 # 对外显示名（Finder / 系统「关于」里看到的那个名字）。改名只动这一处。
-DISPLAY_NAME="${AUTOZ_DISPLAY_NAME:-自适应时区}"
+DISPLAY_NAME="${AUTOZ_DISPLAY_NAME:-AutoZ — часовые пояса}"
 
-echo "==> 清理旧产物"
+echo "==> Очистка результатов предыдущей сборки"
 rm -rf "$APP" "$BUILD"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$BUILD"
 
-echo "==> 目标架构: ${ARCHS}（构建机 ${HOST_ARCH}，最低 macOS ${MIN_MACOS}）"
+echo "==> Архитектуры: ${ARCHS} (сборка на ${HOST_ARCH}, macOS ${MIN_MACOS}+)"
 
 for ARCH in $ARCHS; do
   mkdir -p "$BUILD/$ARCH"
 
-  echo "==> [$ARCH] 编译 C 垫片（转调 AuthorizationExecuteWithPrivileges，Swift 无法直接导入该符号）"
+  echo "==> [$ARCH] Компиляция модуля авторизации C"
   /usr/bin/clang -c "$ROOT/Sources/authshim.c" -o "$BUILD/$ARCH/authshim.o" \
     -Wno-deprecated-declarations -O2 \
     -target "$ARCH-apple-macos$MIN_MACOS" \
     -isysroot "$(xcrun --show-sdk-path)"
 
-  echo "==> [$ARCH] 编译 Swift 主程序"
+  echo "==> [$ARCH] Компиляция приложения Swift"
   /usr/bin/swiftc \
     -O -swift-version 5 \
     -target "$ARCH-apple-macos$MIN_MACOS" \
@@ -55,7 +55,7 @@ for ARCH in $ARCHS; do
     "$ROOT/Sources/main.swift" "$ROOT/Sources/artwork.swift" "$ROOT/Sources/ui.swift" \
     "$BUILD/$ARCH/authshim.o"
 
-  echo "==> [$ARCH] 编译特权助手 autoz-helper（免授权通道；launchd 按需拉起，不常驻）"
+  echo "==> [$ARCH] Компиляция помощника autoz-helper"
   /usr/bin/swiftc \
     -O -swift-version 5 \
     -target "$ARCH-apple-macos$MIN_MACOS" \
@@ -79,37 +79,38 @@ for ARCH in $ARCHS; do
   HELPER_PARTS+=("$BUILD/$ARCH/autoz-helper")
 done
 
-echo "==> 合成主程序"
+echo "==> Сборка исполняемого файла"
 join_archs "$APP/Contents/MacOS/$APP_NAME" "${MAIN_PARTS[@]}"
 /usr/bin/lipo -info "$APP/Contents/MacOS/$APP_NAME" | sed 's/^/    /'
 
-echo "==> 合成特权助手"
+echo "==> Сборка помощника"
 join_archs "$APP/Contents/Resources/autoz-helper" "${HELPER_PARTS[@]}"
 /bin/chmod +x "$APP/Contents/Resources/autoz-helper"
 /usr/bin/lipo -info "$APP/Contents/Resources/autoz-helper" | sed 's/^/    /'
 
-echo "==> 助手自测（11 项协议与安全用例，全部 dry-run，不碰系统）"
-"$BUILD/$HOST_ARCH/autoz-helper" --selftest || { echo "助手自测未通过，终止构建"; exit 1; }
+echo "==> Проверка помощника: 11 проверок без изменения системы"
+"$BUILD/$HOST_ARCH/autoz-helper" --selftest || { echo "Проверка помощника не пройдена; сборка остановлена"; exit 1; }
 
-echo "==> 时区标识自测（菜单里的时区缩写 / UTC 偏移 / 当地时间，固定时间戳断言）"
-"$APP/Contents/MacOS/$APP_NAME" --tz-selftest || { echo "时区标识自测未通过，终止构建"; exit 1; }
+echo "==> Проверка часовых поясов и русской локализации"
+"$APP/Contents/MacOS/$APP_NAME" --tz-selftest || { echo "Проверка часовых поясов не пройдена; сборка остановлена"; exit 1; }
 
-echo "==> 生成 App 图标（Sources/artwork.swift 矢量绘制 → AppIcon.icns）"
+echo "==> Создание значка приложения"
 /usr/bin/swiftc -O -swift-version 5 -parse-as-library \
   -target "$HOST_ARCH-apple-macos$MIN_MACOS" \
   -o "$BUILD/makeicon" \
   "$ROOT/Sources/artwork.swift" "$ROOT/Sources/makeicon.swift"
 "$BUILD/makeicon" "$BUILD/AppIcon.iconset"
 /usr/bin/iconutil -c icns "$BUILD/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
-echo "    已写入 Resources/AppIcon.icns ($(du -h "$APP/Contents/Resources/AppIcon.icns" | cut -f1))"
+echo "    Записан Resources/AppIcon.icns ($(du -h "$APP/Contents/Resources/AppIcon.icns" | cut -f1))"
 
-echo "==> 写入 Info.plist"
+echo "==> Создание Info.plist"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
+    <key>CFBundleDevelopmentRegion</key><string>ru</string>
+    <key>CFBundleLocalizations</key><array><string>ru</string></array>
     <key>CFBundleExecutable</key><string>$APP_NAME</string>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
@@ -119,7 +120,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key><string>$DISPLAY_NAME</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
-    <key>CFBundleVersion</key><string>$VERSION</string>
+    <key>CFBundleVersion</key><string>${VERSION%%-*}</string>
     <key>LSUIElement</key><true/>
     <key>LSMinimumSystemVersion</key><string>$MIN_MACOS</string>
     <key>NSHighResolutionCapable</key><true/>
@@ -128,31 +129,35 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "==> 语法检查 Info.plist"
+echo "==> Проверка Info.plist"
 /usr/bin/plutil -lint "$APP/Contents/Info.plist"
 
-echo "==> ad-hoc 签名（先签嵌套的助手，再签整个 app）"
+echo "==> Локальная подпись помощника и приложения"
 /usr/bin/codesign --force --sign - --timestamp=none "$APP/Contents/Resources/autoz-helper" 2>&1 | sed 's/^/    /' || true
 /usr/bin/codesign --force --sign - --timestamp=none "$APP" 2>&1 | sed 's/^/    /'
 /usr/bin/codesign --verify --verbose=1 "$APP" 2>&1 | sed 's/^/    /' || true
 
-echo "==> 自检（离线命令）"
+echo "==> Проверка автономных команд"
 "$APP/Contents/MacOS/$APP_NAME" --version | sed 's/^/    /'
 "$APP/Contents/MacOS/$APP_NAME" --system | sed 's/^/    /'
 "$APP/Contents/MacOS/$APP_NAME" --format | sed 's/^/    /'
 
 echo
-echo "构建完成: $APP"
+echo "Сборка завершена: $APP"
 du -sh "$APP"
 
 if [[ "${1:-}" == "--install" ]]; then
-  echo "==> 安装到 /Applications"
+  echo "==> Установка в /Applications"
   rm -rf "/Applications/$APP_NAME.app"
   /bin/cp -R "$APP" "/Applications/$APP_NAME.app"
-  echo "已安装: /Applications/$APP_NAME.app"
+  echo "Установлено: /Applications/$APP_NAME.app"
 fi
 
 if [[ "${1:-}" == "--run" || "${1:-}" == "--install" ]]; then
-  echo "==> 启动"
-  /usr/bin/open "/Applications/$APP_NAME.app" 2>/dev/null || /usr/bin/open "$APP"
+  echo "==> Запуск"
+  if [[ "${1:-}" == "--install" ]]; then
+    /usr/bin/open "/Applications/$APP_NAME.app"
+  else
+    /usr/bin/open "$APP"
+  fi
 fi

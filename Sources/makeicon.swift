@@ -13,15 +13,15 @@ struct MakeIcon {
 
         if args.first == "--png" {
             guard args.count >= 3, let size = Double(args[2]) else {
-                FileHandle.standardError.write(Data("用法: makeicon --png <文件> <尺寸>\n".utf8))
+                FileHandle.standardError.write(Data("Использование: makeicon --png <файл> <размер>\n".utf8))
                 exit(2)
             }
             guard let data = Artwork.pngData(size: CGFloat(size)) else {
-                FileHandle.standardError.write(Data("绘制失败\n".utf8)); exit(1)
+                FileHandle.standardError.write(Data("Ошибка отрисовки\n".utf8)); exit(1)
             }
             do { try data.write(to: URL(fileURLWithPath: args[1])) }
-            catch { FileHandle.standardError.write(Data("写入失败: \(error)\n".utf8)); exit(1) }
-            print("已导出 \(args[1])（\(Int(size))px）")
+            catch { FileHandle.standardError.write(Data("Ошибка записи: \(error)\n".utf8)); exit(1) }
+            print("Экспортирован \(args[1]) (\(Int(size))px)")
             exit(0)
         }
 
@@ -29,7 +29,7 @@ struct MakeIcon {
         let fm = FileManager.default
         try? fm.removeItem(atPath: outDir)
         do { try fm.createDirectory(atPath: outDir, withIntermediateDirectories: true) }
-        catch { FileHandle.standardError.write(Data("创建目录失败: \(error)\n".utf8)); exit(1) }
+        catch { FileHandle.standardError.write(Data("Ошибка создания каталога: \(error)\n".utf8)); exit(1) }
 
         // iconset 必须包含这 10 个文件名（同名尺寸各出现两次，用缓存避免重复绘制）
         let entries: [(String, Int)] = [
@@ -44,15 +44,15 @@ struct MakeIcon {
             let data: Data
             if let c = cache[px] { data = c } else {
                 guard let d = Artwork.pngData(size: CGFloat(px)) else {
-                    FileHandle.standardError.write(Data("绘制 \(px)px 失败\n".utf8)); exit(1)
+                    FileHandle.standardError.write(Data("Ошибка отрисовки \(px)px\n".utf8)); exit(1)
                 }
                 cache[px] = d
                 data = d
             }
             let path = outDir + "/" + name + ".png"
             do { try data.write(to: URL(fileURLWithPath: path)) }
-            catch { FileHandle.standardError.write(Data("写入 \(path) 失败\n".utf8)); exit(1) }
+            catch { FileHandle.standardError.write(Data("Ошибка записи \(path)\n".utf8)); exit(1) }
         }
-        print("已生成 iconset: \(outDir)（\(entries.count) 个文件）")
+        print("Создан iconset: \(outDir) (\(entries.count) файлов)")
     }
 }

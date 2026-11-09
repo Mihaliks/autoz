@@ -68,7 +68,7 @@ func hlog(_ msg: String) {
 
 @discardableResult
 func run(_ path: String, _ args: [String]) -> (status: Int32, out: String, err: String) {
-    guard FileManager.default.isExecutableFile(atPath: path) else { return (-1, "", "不可执行: \(path)") }
+    guard FileManager.default.isExecutableFile(atPath: path) else { return (-1, "", "Файл не исполняемый: \(path)") }
     let p = Process()
     p.executableURL = URL(fileURLWithPath: path)
     p.arguments = args
@@ -149,7 +149,7 @@ struct ApplyResult {
 func applyZone(_ zone: String, auto: Bool?, dryRun: Bool) -> ApplyResult {
     guard let zfile = zoneFile(zone) else {
         return ApplyResult(ok: false, changed: false, zone: zone, auto: auto,
-                           msg: "时区非法或不存在（未通过白名单校验）：\(zone)", steps: [])
+                           msg: "Пояс недопустим или отсутствует (проверка списка разрешённых): \(zone)", steps: [])
     }
     var steps: [String] = []
     var changed = false
@@ -163,7 +163,7 @@ func applyZone(_ zone: String, auto: Bool?, dryRun: Bool) -> ApplyResult {
             hlog("systemsetup -settimezone \(zone) -> \(r.status) \(r.err)")
             if readZone() != zone {
                 // 兜底：原子替换软链（先建临时链，再 rename 覆盖，无中间态）
-                steps.append("原子替换 /etc/localtime → \(zfile)")
+                steps.append("Атомарная замена /etc/localtime → \(zfile)")
                 let tmp = "/etc/localtime.autoz.tmp"
                 try? FileManager.default.removeItem(atPath: tmp)
                 do {
@@ -171,15 +171,15 @@ func applyZone(_ zone: String, auto: Bool?, dryRun: Bool) -> ApplyResult {
                 } catch {
                     // 失败时上报「实际仍是哪个时区」，不要用请求值冒充现状
                     return ApplyResult(ok: false, changed: false, zone: readZone(), auto: readAuto(),
-                                       msg: "创建临时软链失败：\(error.localizedDescription)", steps: steps)
+                                       msg: "Не удалось создать временную символическую ссылку: \(error.localizedDescription)", steps: steps)
                 }
                 if rename(tmp, "/etc/localtime") != 0 {
                     let e = String(cString: strerror(errno))
                     try? FileManager.default.removeItem(atPath: tmp)
                     return ApplyResult(ok: false, changed: false, zone: readZone(), auto: readAuto(),
-                                       msg: "替换 /etc/localtime 失败：\(e)", steps: steps)
+                                       msg: "Не удалось заменить /etc/localtime: \(e)", steps: steps)
                 }
-                hlog("已原子替换 /etc/localtime → \(zfile)")
+                hlog("/etc/localtime атомарно заменён → \(zfile)")
             }
         }
     }
@@ -202,7 +202,7 @@ func applyZone(_ zone: String, auto: Bool?, dryRun: Bool) -> ApplyResult {
 
     if dryRun {
         return ApplyResult(ok: true, changed: changed, zone: zone, auto: auto,
-                           msg: changed ? "试运行：计划 \(steps.count) 个动作，未执行" : "试运行：无需变更",
+                           msg: changed ? "Пробный режим: \(steps.count) действий, без выполнения" : "Пробный режим: изменений не требуется",
                            steps: steps)
     }
 
@@ -210,12 +210,12 @@ func applyZone(_ zone: String, auto: Bool?, dryRun: Bool) -> ApplyResult {
     let nowZone = readZone()
     guard nowZone == zone else {
         return ApplyResult(ok: false, changed: changed, zone: nowZone, auto: readAuto(),
-                           msg: "写入后校验不一致（/etc/localtime → \(nowZone.isEmpty ? "未知" : nowZone)）",
+                           msg: "Проверка после записи не пройдена (/etc/localtime → \(nowZone.isEmpty ? "неизвестно" : nowZone))",
                            steps: steps)
     }
     let nowAuto = readAuto()
     return ApplyResult(ok: true, changed: changed, zone: nowZone, auto: nowAuto ?? auto,
-                       msg: changed ? "已应用" : "已经是目标状态", steps: steps)
+                       msg: changed ? "Применено" : "Уже установлено целевое состояние", steps: steps)
 }
 
 // MARK: - Unix socket
@@ -235,18 +235,18 @@ func makeAddr(_ path: String) -> (sockaddr_un, socklen_t) {
 
 func bindListen(_ path: String) -> Int32 {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-    guard fd >= 0 else { hlog("socket() 失败 errno=\(errno)"); return -1 }
+    guard fd >= 0 else { hlog("Ошибка socket(), errno=\(errno)"); return -1 }
     var (addr, len) = makeAddr(path)
     let rc = withUnsafePointer(to: &addr) {
         $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, len) }
     }
     guard rc == 0 else {
-        hlog("bind(\(path)) 失败 errno=\(errno) \(String(cString: strerror(errno)))")
+        hlog("bind(\(path)) ошибка, errno=\(errno) \(String(cString: strerror(errno)))")
         close(fd)
         return -1
     }
     guard listen(fd, 16) == 0 else {
-        hlog("listen 失败 errno=\(errno)")
+        hlog("listen ошибка, errno=\(errno)")
         close(fd)
         return -1
     }
@@ -266,7 +266,7 @@ func launchdListenFD() -> Int32? {
     var cnt = 0
     let rc = "Listeners".withCString { launch_activate_socket($0, &fds, &cnt) }
     guard rc == 0, let f = fds, cnt > 0 else {
-        hlog("launch_activate_socket 失败 rc=\(rc) cnt=\(cnt)")
+        hlog("Ошибка launch_activate_socket rc=\(rc) cnt=\(cnt)")
         return nil
     }
     return f[0]
@@ -305,7 +305,7 @@ func handle(line: String, dryRun: Bool) -> [String: Any] {
     guard let data = line.data(using: .utf8),
           let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
           let cmd = obj["cmd"] as? String else {
-        return ["ok": false, "msg": "报文不是合法 JSON 或缺少 cmd"]
+        return ["ok": false, "msg": "Некорректный JSON или отсутствует cmd"]
     }
     switch cmd {
     case "ping":
@@ -313,24 +313,24 @@ func handle(line: String, dryRun: Bool) -> [String: Any] {
                 "zone": readZone(), "auto": readAuto() as Any, "dryRun": dryRun]
 
     case "state":
-        var d: [String: Any] = ["ok": true, "msg": "当前状态", "zone": readZone(),
+        var d: [String: Any] = ["ok": true, "msg": "Текущее состояние", "zone": readZone(),
                                 "euid": Int(geteuid())]
         if let a = readAuto() { d["auto"] = a }
         return d
 
     case "set_zone":
-        guard let zone = obj["zone"] as? String else { return ["ok": false, "msg": "缺少 zone 字段"] }
+        guard let zone = obj["zone"] as? String else { return ["ok": false, "msg": "Отсутствует поле zone"] }
         let auto = obj["auto"] as? Bool
         let r = applyZone(zone, auto: auto, dryRun: dryRun)
         hlog("set_zone zone=\(zone) auto=\(auto.map(String.init) ?? "-") → ok=\(r.ok) \(r.msg)")
         return r.json
 
     case "set_auto":
-        guard let a = obj["auto"] as? Bool else { return ["ok": false, "msg": "缺少 auto 字段（布尔）"] }
+        guard let a = obj["auto"] as? Bool else { return ["ok": false, "msg": "Отсутствует логическое поле auto"] }
         // 复用 applyZone：zone 传当前值，只动 auto
         let cur = readZone()
         guard !cur.isEmpty, zoneFile(cur) != nil else {
-            return ["ok": false, "msg": "当前时区 \(cur) 不在白名单内，拒绝操作"]
+            return ["ok": false, "msg": "Текущий пояс \(cur) не разрешён; операция отклонена"]
         }
         let r = applyZone(cur, auto: a, dryRun: dryRun)
         hlog("set_auto auto=\(a) → ok=\(r.ok) \(r.msg)")
@@ -338,7 +338,7 @@ func handle(line: String, dryRun: Bool) -> [String: Any] {
 
     default:
         // 明确不做的事：不接受任意命令、不接受路径、不存在 exec 指令
-        return ["ok": false, "msg": "不支持的指令：\(cmd)（仅支持 ping/state/set_zone/set_auto）"]
+        return ["ok": false, "msg": "Неподдерживаемая команда: \(cmd) (допустимы ping/state/set_zone/set_auto)"]
     }
 }
 
@@ -346,12 +346,12 @@ func handle(line: String, dryRun: Bool) -> [String: Any] {
 
 func serveClient(_ cfd: Int32, allowUID: uid_t, dryRun: Bool) {
     guard let uid = peerUID(cfd) else {
-        respond(cfd, ["ok": false, "msg": "无法确认对端 uid"])
+        respond(cfd, ["ok": false, "msg": "Не удалось определить UID клиента"])
         return
     }
     guard uid == allowUID || uid == 0 else {
-        hlog("拒绝连接：对端 uid=\(uid) 允许=\(allowUID)")
-        respond(cfd, ["ok": false, "msg": "对端 uid \(uid) 未被授权（允许 \(allowUID)）"])
+        hlog("Соединение отклонено: UID клиента=\(uid), разрешён=\(allowUID)")
+        respond(cfd, ["ok": false, "msg": "UID клиента \(uid) не авторизован (разрешён \(allowUID))"])
         return
     }
     var buf = Data()
@@ -376,16 +376,16 @@ func serveLoop(listenFD: Int32, allowUID: uid_t, dryRun: Bool, idle: Int32) {
     while Date().timeIntervalSince(born) < H.maxLifeSeconds {
         var pfd = pollfd(fd: listenFD, events: Int16(POLLIN), revents: 0)
         let pr = poll(&pfd, 1, idle * 1000)
-        if pr == 0 { hlog("空闲 \(idle)s，退出（不常驻）"); break }
+        if pr == 0 { hlog("Нет запросов \(idle) с; завершение работы"); break }
         if pr < 0 {
             if errno == EINTR { continue }
-            hlog("poll 出错 errno=\(errno)")
+            hlog("Ошибка poll errno=\(errno)")
             break
         }
         let cfd = accept(listenFD, nil, nil)
         if cfd < 0 {
             if errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK { continue }
-            hlog("accept 出错 errno=\(errno)")
+            hlog("Ошибка accept errno=\(errno)")
             break
         }
         serveClient(cfd, allowUID: allowUID, dryRun: dryRun)
@@ -431,7 +431,7 @@ func selftest() -> Int32 {
     let path = NSTemporaryDirectory() + "autoz-helper-selftest-\(getpid()).sock"
     try? FileManager.default.removeItem(atPath: path)
     let lfd = bindListen(path)
-    guard lfd >= 0 else { print("✗ 无法监听 \(path)"); return 1 }
+    guard lfd >= 0 else { print("✗ Не удалось открыть сокет \(path)"); return 1 }
 
     // 另起一个「只允许别的 uid」的监听，用来验证 uid 门禁
     let path2 = path + ".deny"
@@ -449,39 +449,39 @@ func selftest() -> Int32 {
     var pass = 0, fail = 0
     func check(_ name: String, _ req: String, socket: String? = nil, _ expect: ([String: Any]) -> Bool) {
         guard let r = clientRequest(socketPath: socket ?? path, json: req) else {
-            print("✗ \(name) — 无响应"); fail += 1; return
+            print("✗ \(name) — нет ответа"); fail += 1; return
         }
         if expect(r) { print("✓ \(name)"); pass += 1 }
-        else { print("✗ \(name) — 响应: \(r)"); fail += 1 }
+        else { print("✗ \(name) — ответ: \(r)"); fail += 1 }
     }
 
-    print("=== autoz-helper 自测（全部 dry-run，不碰系统）===")
+    print("=== Проверка autoz-helper (пробный режим, без изменения системы)===")
     print("socket: \(path)")
-    print("当前 uid: \(getuid())  拒绝用 uid: \(denyUID)")
+    print("Текущий UID: \(getuid())  UID для проверки отказа: \(denyUID)")
     print("")
 
-    check("ping 正常", #"{"cmd":"ping"}"#) { $0["ok"] as? Bool == true && $0["msg"] as? String == "pong" }
-    check("state 返回当前时区", #"{"cmd":"state"}"#) { ($0["zone"] as? String)?.isEmpty == false }
-    check("拒绝路径穿越 ../..", #"{"cmd":"set_zone","zone":"../../etc/passwd"}"#) {
+    check("Успешный ping", #"{"cmd":"ping"}"#) { $0["ok"] as? Bool == true && $0["msg"] as? String == "pong" }
+    check("state возвращает текущий пояс", #"{"cmd":"state"}"#) { ($0["zone"] as? String)?.isEmpty == false }
+    check("Отклонение обхода пути ../..", #"{"cmd":"set_zone","zone":"../../etc/passwd"}"#) {
         $0["ok"] as? Bool == false
     }
-    check("拒绝绝对路径 /etc/passwd", #"{"cmd":"set_zone","zone":"/etc/passwd"}"#) {
+    check("Отклонение абсолютного пути /etc/passwd", #"{"cmd":"set_zone","zone":"/etc/passwd"}"#) {
         $0["ok"] as? Bool == false
     }
-    check("拒绝不存在的时区名", #"{"cmd":"set_zone","zone":"Nope/Nowhere"}"#) {
+    check("Отклонение несуществующего пояса", #"{"cmd":"set_zone","zone":"Nope/Nowhere"}"#) {
         $0["ok"] as? Bool == false
     }
-    check("接受合法时区（dry-run 出计划）", #"{"cmd":"set_zone","zone":"Asia/Tokyo","auto":false}"#) {
+    check("Допустимый пояс принят (план без выполнения)", #"{"cmd":"set_zone","zone":"Asia/Tokyo","auto":false}"#) {
         $0["ok"] as? Bool == true && (($0["steps"] as? [String])?.isEmpty == false)
     }
-    check("set_auto 合法布尔", #"{"cmd":"set_auto","auto":true}"#) { $0["ok"] as? Bool == true }
-    check("拒绝未知指令（无 exec 面）", #"{"cmd":"exec","program":"/bin/rm"}"#) {
-        $0["ok"] as? Bool == false && (($0["msg"] as? String)?.contains("不支持的指令") ?? false)
+    check("set_auto с логическим значением", #"{"cmd":"set_auto","auto":true}"#) { $0["ok"] as? Bool == true }
+    check("Отклонение неизвестной команды (exec недоступен)", #"{"cmd":"exec","program":"/bin/rm"}"#) {
+        $0["ok"] as? Bool == false && (($0["msg"] as? String)?.contains("Неподдерживаемая команда") ?? false)
     }
-    check("拒绝非 JSON 报文", "hello world") { $0["ok"] as? Bool == false }
+    check("Отклонение сообщения без JSON", "hello world") { $0["ok"] as? Bool == false }
     if lfd2 >= 0 {
-        check("uid 门禁：非授权 uid 被拒", #"{"cmd":"ping"}"#, socket: path2) {
-            $0["ok"] as? Bool == false && (($0["msg"] as? String)?.contains("未被授权") ?? false)
+        check("Неавторизованный UID отклонён", #"{"cmd":"ping"}"#, socket: path2) {
+            $0["ok"] as? Bool == false && (($0["msg"] as? String)?.contains("не авторизован") ?? false)
         }
     }
 
@@ -509,15 +509,15 @@ func selftest() -> Int32 {
             if let nl = buf.firstIndex(of: 0x0A),
                let o = (try? JSONSerialization.jsonObject(with: buf.subdata(in: buf.startIndex..<nl))) as? [String: Any],
                o["ok"] as? Bool == true {
-                print("✓ 分片写入（半包）仍能正确解析"); pass += 1
+                print("✓ Сообщение из нескольких фрагментов разобрано"); pass += 1
             } else {
-                print("✗ 分片写入解析失败"); fail += 1
+                print("✗ Ошибка разбора фрагментированного сообщения"); fail += 1
             }
         }
     }
 
     print("")
-    print("结果：\(pass) 通过 / \(fail) 失败")
+    print("Результат: \(pass) пройдено / \(fail) ошибок")
     try? FileManager.default.removeItem(atPath: path)
     try? FileManager.default.removeItem(atPath: path2)
     return fail == 0 ? 0 : 1
@@ -527,25 +527,25 @@ func selftest() -> Int32 {
 
 func printPlan(_ zone: String, auto: Bool?) {
     let cur = readZone()
-    print("helper 版本:   \(H.version)")
+    print("Версия помощника:   \(H.version)")
     print("socket:        \(H.socketPath)")
-    print("允许 uid:      （安装时写入 plist）")
-    print("当前 euid:     \(geteuid())")
-    print("当前时区:      \(cur.isEmpty ? "未知" : cur)")
-    print("自动设时区:    \(String(describing: readAuto()))")
+    print("Разрешённый UID:      (записывается в plist при установке)")
+    print("Текущий EUID:     \(geteuid())")
+    print("Текущий пояс:      \(cur.isEmpty ? "неизвестно" : cur)")
+    print("Автовыбор пояса:    \(String(describing: readAuto()))")
     print("")
-    print("目标时区:      \(zone)")
+    print("Целевой пояс:      \(zone)")
     if let zf = zoneFile(zone) {
-        print("白名单校验:    ✓ 通过（\(zf)）")
+        print("Список разрешённых:    ✓ допустим (\(zf))")
     } else {
-        print("白名单校验:    ✗ 拒绝（非法或不存在）→ 不会执行任何动作")
+        print("Список разрешённых:    ✗ отклонён (недопустим или отсутствует); действий не будет")
         return
     }
-    print("自动时区设为:  \(auto.map { $0 ? "开" : "关" } ?? "不变")")
+    print("Автовыбор пояса:  \(auto.map { $0 ? "вкл." : "выкл." } ?? "без изменения")")
     print("")
-    print("将执行（argv 直传，不经 shell）：")
+    print("План (прямые аргументы argv, без оболочки):")
     let r = applyZone(zone, auto: auto, dryRun: true)
-    if r.steps.isEmpty { print("  （无需变更，已是目标状态）") }
+    if r.steps.isEmpty { print("  (изменений не требуется, целевое состояние уже установлено)") }
     for (i, s) in r.steps.enumerated() { print("  \(i + 1). \(s)") }
 }
 
@@ -572,25 +572,25 @@ if has("--version") {
 // 注意：无参数时**不能**当 help —— launchd 可能以无参形式拉起，此时必须进入服务模式
 if has("--help") {
     print("""
-    autoz-helper \(H.version) — AutoZ 特权助手
+    autoz-helper \(H.version) — Помощник AutoZ с правами администратора
 
-    launchd 模式（默认，由 Sockets 键按需拉起）:
+    Режим launchd (по умолчанию, запуск по запросу через Sockets):
       autoz-helper --allow-uid <uid>
 
-    手工监听（调试用，无需 root）:
+    Ручной запуск сокета (отладка, без root):
       autoz-helper --socket <path> --allow-uid <uid> [--dry-run]
 
-    自测（无需 root，全部 dry-run）:
+    Проверки (без root и изменения системы):
       autoz-helper --selftest
 
-    查看（不执行）:
+    Просмотр (без выполнения):
       autoz-helper --state
       autoz-helper --print-plan <zone> [--auto true|false]
 
-    一次性执行（需 root）:
+    Однократное выполнение (нужен root):
       sudo autoz-helper --set-zone <zone> [--auto true|false] [--dry-run]
 
-    支持指令（socket 协议，换行分隔 JSON）:
+    Команды (сокет, JSON с разделением строк):
       {"cmd":"ping"}
       {"cmd":"state"}
       {"cmd":"set_zone","zone":"Asia/Tokyo","auto":false}
@@ -607,11 +607,11 @@ if has("--selftest") {
 }
 
 if has("--state") {
-    print("时区:       \(readZone())")
-    print("自动设时区: \(String(describing: readAuto()))")
+    print("Пояс:       \(readZone())")
+    print("Автовыбор пояса: \(String(describing: readAuto()))")
     print("euid:       \(geteuid())")
-    print("socket:     \(FileManager.default.fileExists(atPath: H.socketPath) ? "存在" : "不存在")")
-    print("plist:      \(FileManager.default.fileExists(atPath: H.plistPath) ? "存在" : "不存在")")
+    print("socket:     \(FileManager.default.fileExists(atPath: H.socketPath) ? "есть" : "нет")")
+    print("plist:      \(FileManager.default.fileExists(atPath: H.plistPath) ? "есть" : "нет")")
     exit(0)
 }
 
@@ -625,16 +625,16 @@ if has("--print-plan") {
 
 if has("--set-zone") {
     guard let zone = strArg("--set-zone") else {
-        print("用法: --set-zone <IANA 时区>"); exit(1)
+        print("Использование: --set-zone <пояс IANA>"); exit(1)
     }
     var auto: Bool? = nil
     if let a = strArg("--auto") { auto = (a == "true" || a == "1") }
     if !dryRun && geteuid() != 0 {
-        print("✗ 需要 root（当前 euid=\(geteuid())）。加 sudo 或先用 --dry-run 看计划。")
+        print("✗ Нужен root (текущий EUID=\(geteuid())). Используйте sudo или просмотрите план с --dry-run.")
         exit(2)
     }
     let r = applyZone(zone, auto: auto, dryRun: dryRun)
-    print(r.ok ? "OK: \(r.msg)（zone=\(r.zone) auto=\(r.auto.map(String.init) ?? "-")）" : "FAILED: \(r.msg)")
+    print(r.ok ? "OK: \(r.msg) (zone=\(r.zone) auto=\(r.auto.map(String.init) ?? "-"))" : "FAILED: \(r.msg)")
     for s in r.steps { print("  · \(s)") }
     exit(r.ok ? 0 : 3)
 }
@@ -648,22 +648,22 @@ if let p = strArg("--socket") {
     try? FileManager.default.removeItem(atPath: p)
     listenFD = bindListen(p)
     cleanupSocket = true
-    hlog("手工监听 \(p) allowUID=\(allowUID) dryRun=\(dryRun)")
+    hlog("Ручной сокет \(p) allowUID=\(allowUID) dryRun=\(dryRun)")
 } else {
     if let fd = launchdListenFD() {
         listenFD = fd
-        hlog("launchd 按需拉起，已取得监听 fd=\(fd) allowUID=\(allowUID)")
+        hlog("Запуск через launchd, получен FD сокета=\(fd) allowUID=\(allowUID)")
     } else {
         // 兜底：launchd 没给 fd（例如被手工以 root 运行），自己监听
         try? FileManager.default.removeItem(atPath: H.socketPath)
         listenFD = bindListen(H.socketPath)
         cleanupSocket = true
-        hlog("未取得 launchd fd → 自行监听 \(H.socketPath)")
+        hlog("Нет FD от launchd → отдельный сокет \(H.socketPath)")
     }
 }
 
 guard listenFD >= 0 else {
-    print("✗ 无法建立监听")
+    print("✗ Не удалось открыть сокет")
     exit(1)
 }
 

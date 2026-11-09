@@ -19,7 +19,7 @@ func openDateAndTimeSettings() -> Bool {
                 "x-apple.systempreferences:com.apple.preference.datetime"]
     for u in urls {
         if let url = URL(string: u), NSWorkspace.shared.open(url) {
-            log("已打开「日期与时间」设置：\(u)")
+            log("Открыты настройки даты и времени: \(u)")
             return true
         }
     }
@@ -35,17 +35,17 @@ func openCalendarApp() -> Bool {
     let path = "/System/Applications/Calendar.app"
     if FileManager.default.fileExists(atPath: path),
        NSWorkspace.shared.open(URL(fileURLWithPath: path)) {
-        log("已打开系统日历：\(path)")
+        log("Открыт календарь: \(path)")
         return true
     }
     if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, err in
-            if let err { log("打开日历失败：\(err.localizedDescription)") }
+            if let err { log("Не удалось открыть календарь: \(err.localizedDescription)") }
         }
-        log("已打开系统日历（按 bundle id）：com.apple.iCal")
+        log("Открыт календарь по bundle ID: com.apple.iCal")
         return true
     }
-    log("没找到系统日历")
+    log("Календарь не найден")
     return false
 }
 
@@ -144,7 +144,7 @@ final class AZPill: NSView {
         ])
     }
 
-    required init?(coder: NSCoder) { fatalError("不支持归档") }
+    required init?(coder: NSCoder) { fatalError("Декодирование не поддерживается") }
 
     override var intrinsicContentSize: NSSize {
         let s = label.intrinsicContentSize
@@ -217,7 +217,7 @@ final class AZCard: NSView {
         ])
     }
 
-    required init?(coder: NSCoder) { fatalError("不支持归档") }
+    required init?(coder: NSCoder) { fatalError("Декодирование не поддерживается") }
 
     /// 让某个子行横向撑满卡片内容宽（表格、分隔线、按钮行需要）。
     /// 约束只涉及 stack 与其子视图 —— 都在同一棵子树里，可以安全地在 init 之后激活。
@@ -276,7 +276,7 @@ final class AZTimeCell: NSView {
         refresh()
     }
 
-    required init?(coder: NSCoder) { fatalError("不支持归档") }
+    required init?(coder: NSCoder) { fatalError("Декодирование не поддерживается") }
 
     /// 按秒调用：只改字符串，**不重建视图树**（否则滚动位置和开关状态会被重置）。
     func refresh() {
@@ -330,7 +330,7 @@ final class AZKVTable: NSView {
                 row.topAnchor.constraint(equalTo: previousBottom),
 
                 k.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 12),
-                k.widthAnchor.constraint(equalToConstant: 86),
+                k.widthAnchor.constraint(equalToConstant: 124),
                 k.centerYAnchor.constraint(equalTo: row.centerYAnchor),
 
                 r.value.leadingAnchor.constraint(equalTo: k.trailingAnchor, constant: 11),
@@ -368,7 +368,7 @@ final class AZKVTable: NSView {
         previousBottom.constraint(equalTo: bottomAnchor).isActive = true
     }
 
-    required init?(coder: NSCoder) { fatalError("不支持归档") }
+    required init?(coder: NSCoder) { fatalError("Декодирование не поддерживается") }
 
     override func draw(_ dirtyRect: NSRect) {
         let r = bounds.insetBy(dx: 0.5, dy: 0.5)
@@ -425,7 +425,7 @@ final class AZNavCell: NSTableCellView {
         ])
     }
 
-    required init?(coder: NSCoder) { fatalError("不支持归档") }
+    required init?(coder: NSCoder) { fatalError("Декодирование не поддерживается") }
 
     func setTitle(_ s: String) { title.stringValue = s }
 }
@@ -454,7 +454,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
     /// 左侧导航的分区。设置类界面一律「左导航 + 右内容 + 滚动」——
     /// 把所有卡片堆成一根长滚动条，屏幕一矮就有内容被推出可视区，
     /// 而且视觉上分不清主次（2026-10-02 用户明确要求，全局约定）。
-    private static let sections = ["时区同步", "菜单栏", "启动", "改时区方式", "维护", "关于"]
+    private static let sections = ["Синхронизация", "Строка меню", "Автозапуск", "Авторизация", "Диагностика", "О программе"]
 
     private let headerBar   = AZPane()
     private let headerIcon  = NSImageView()
@@ -484,7 +484,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
 
     private init() {
         // 固定尺寸：分区后每页内容都不高，不需要再按内容伸缩（那套在矮屏上本来也不可靠）
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 880, height: 620),
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 620),
                          styleMask: [.titled, .closable, .fullSizeContentView],
                          backing: .buffered, defer: false)
         w.title = appDisplayName
@@ -497,8 +497,8 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         w.backgroundColor = Theme.surface
         // 宽度锁死：内容一长，Auto Layout 会推着窗口一起变宽（实测 880 被撑成 917，
         // 而且随文案长短变化）。两端都钉住，内容超出就走滚动 —— 窗口尺寸不该由内容决定。
-        w.contentMinSize = NSSize(width: 880, height: 560)
-        w.contentMaxSize = NSSize(width: 880, height: 900)
+        w.contentMinSize = NSSize(width: 1000, height: 560)
+        w.contentMaxSize = NSSize(width: 1000, height: 900)
         super.init(window: w)
         for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             w.standardWindowButton(b)?.isHidden = true
@@ -506,7 +506,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         buildShell()
     }
 
-    required init?(coder: NSCoder) { fatalError("不支持归档") }
+    required init?(coder: NSCoder) { fatalError("Декодирование не поддерживается") }
 
     // MARK: 外壳（一次建好：头部 / 导航 / 内容 / 脚部）
 
@@ -613,7 +613,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         footer.addSubview(footDot)
         footer.addSubview(footText)
 
-        let closeBtn = NSButton(title: "关闭", target: self, action: #selector(closeConsole(_:)))
+        let closeBtn = NSButton(title: "Закрыть", target: self, action: #selector(closeConsole(_:)))
         closeBtn.bezelStyle = .rounded
         closeBtn.keyEquivalent = "\r"
         closeBtn.translatesAutoresizingMaskIntoConstraints = false
@@ -650,7 +650,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
             navPane.topAnchor.constraint(equalTo: headerBar.bottomAnchor),
             navPane.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navPane.bottomAnchor.constraint(equalTo: footer.topAnchor),
-            navPane.widthAnchor.constraint(equalToConstant: 176),
+            navPane.widthAnchor.constraint(equalToConstant: 184),
 
             navScroll.topAnchor.constraint(equalTo: navPane.topAnchor, constant: 9),
             navScroll.leadingAnchor.constraint(equalTo: navPane.leadingAnchor),
@@ -712,12 +712,12 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         NSApp.activate(ignoringOtherApps: true)
         // 显式钉住尺寸：内容需求一旦超过它，AppKit 会悄悄把窗口撑宽，
         // 界面就会「自己长大」（2026-10-02 踩过：一行三个按钮把 880 撑成 917）
-        window?.setContentSize(NSSize(width: 880, height: 620))
+        window?.setContentSize(NSSize(width: 1000, height: 620))
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         if let w = window {
-            log("高级配置窗口已显示：frame=\(NSStringFromRect(w.frame)) 最小=\(NSStringFromSize(w.contentMinSize)) "
-                + "内容需求=\(NSStringFromSize(content.fittingSize))")
+            log("Окно настроек открыто: frame=\(NSStringFromRect(w.frame)) минимум=\(NSStringFromSize(w.contentMinSize)) "
+                + "размер содержимого=\(NSStringFromSize(content.fittingSize))")
         }
     }
 
@@ -762,16 +762,16 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         let helperOK = HelperChannel.socketExists && HelperChannel.binaryInstalled && HelperChannel.plistInstalled
         let helperInstalled = HelperChannel.plistInstalled
         let (dot, text): (NSColor, String) = helperOK
-            ? (.systemGreen, "免授权模式已启用 · 改时区零弹窗")
+            ? (.systemGreen, "Помощник готов · Смена часового пояса без запроса пароля")
             : (helperInstalled ? .systemOrange : .systemGray,
-               helperInstalled ? "助手已就位但没响应 · 可在「改时区方式」里重装" : "免授权模式未安装 · 每次改时区会弹授权框")
+               helperInstalled ? "Помощник не отвечает · Переустановите в разделе «Смена часового пояса»" : "Помощник не установлен · Для смены часового пояса нужен пароль")
         footDot.layer?.backgroundColor = dot.cgColor
         footText.stringValue = text
 
         lastHelperOK = helperOK
         lastHelperInstalled = helperInstalled
         rebuildContent()
-        log("高级配置已刷新（助手就绪=\(helperOK)，分区=\(Self.sections[currentSection])）")
+        log("Настройки обновлены (помощник готов=\(helperOK), раздел=\(Self.sections[currentSection])）")
     }
 
     /// 时间停在打开那一刻会误导（这窗口本来就有人拿来看时间），所以让它按秒跟着走。
@@ -797,15 +797,15 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
 
         // 1. 期望时区：菜单栏上常显的东八区
         let t1 = AZTimeCell(zone: bj)
-        let r1 = AZKVTable.Row("期望时区",
-                               zoneCell(name: zoneCNName(bj), chip: zoneChipText(bj, at: now),
+        let r1 = AZKVTable.Row("Часы в меню",
+                               zoneCell(name: localizedZoneName(bj), chip: zoneChipText(bj, at: now),
                                         kind: .accent, sub: K.beijingID),
                                time: t1)
 
         // 2. 实际时区：系统当前时区
         let t2 = AZTimeCell(zone: sys)
-        let r2 = AZKVTable.Row("实际时区",
-                               zoneCell(name: zoneCNName(sys), chip: zoneChipText(sys, at: now),
+        let r2 = AZKVTable.Row("Системный пояс",
+                               zoneCell(name: localizedZoneName(sys), chip: zoneChipText(sys, at: now),
                                         kind: .plain, sub: systemZoneID()),
                                time: t2)
 
@@ -817,20 +817,20 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
             let cell = AZTimeCell(zone: exit ?? sys)
             t3 = cell
             let same = (exit?.secondsFromGMT(for: now) ?? Int.min) == sys.secondsFromGMT(for: now)
-            r3 = AZKVTable.Row("出口时区",
-                               zoneCell(name: exit.map { zoneCNName($0) } ?? det.zoneID,
-                                        chip: same ? "与系统一致" : "与系统不同",
+            r3 = AZKVTable.Row("Пояс по IP",
+                               zoneCell(name: exit.map { localizedZoneName($0) } ?? det.zoneID,
+                                        chip: same ? "Как в системе" : "Отличается",
                                         kind: same ? .ok : .plain,
                                         sub: "\(det.ip) · \(det.zoneID)"),
                                time: cell)
         } else {
-            r3 = AZKVTable.Row("出口时区",
-                               zoneCell(name: "尚未检测", chip: "—", kind: .plain, sub: "点下面的按钮查一次"),
+            r3 = AZKVTable.Row("Пояс по IP",
+                               zoneCell(name: "Не определён", chip: "—", kind: .plain, sub: "Нажмите «Проверить» ниже"),
                                time: nil)
         }
 
         // 4. 是否有差别：有 → 橙徽章 + 紧凑时差 + 恢复按钮；无 → 绿勾 + 一句话
-        let r4 = AZKVTable.Row("是否有差别", diffCell(differs: differs, system: sys, at: now), time: nil)
+        let r4 = AZKVTable.Row("Разница", diffCell(differs: differs, system: sys, at: now), time: nil)
 
         let table = AZKVTable([r1, r2, r3, r4])
         statusRefreshers = [t1.refresh, t2.refresh]
@@ -876,17 +876,17 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
             let delta = NSTextField(labelWithString: beijingDeltaShort(system, at: now))
             delta.font = Theme.mono11
             delta.textColor = .secondaryLabelColor
-            var views: [NSView] = [AZPill("有", .accent), delta]
+            var views: [NSView] = [AZPill("Есть", .accent), delta]
             // 归位目标固定取「归位时区」，不再取决于有没有快照记录 ——
             // 快照可能被跟随功能自己写脏，拿它当恢复目标会把人送回代理时区。
             let home = Store.shared.homeZone
-            let b = button("回到归位时区", #selector(restore(_:)))
-            b.toolTip = "把系统时区写回归位时区 \(home)，并关闭同步"
+            let b = button("Вернуть домашний пояс", #selector(restore(_:)))
+            b.toolTip = "Установить домашний часовой пояс \(home)и отключить синхронизацию"
             views.append(b)
             s.setViews(views, in: .leading)
         } else {
-            s.setViews([AZTick(), AZPill("无", .ok),
-                        caption("已与系统时区一致，无需处理", maxWidth: 320)], in: .leading)
+            s.setViews([AZTick(), AZPill("Нет", .ok),
+                        caption("Совпадает с системным поясом", maxWidth: 320)], in: .leading)
         }
         return s
     }
@@ -924,7 +924,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         guard row >= 0, row != currentSection else { return }
         currentSection = row
         rebuildContent(scrollToTop: true)
-        log("高级配置切到分区：\(Self.sections[row])")
+        log("Открыт раздел настроек: \(Self.sections[row])")
     }
 
     @objc private func navClicked(_ sender: Any) {
@@ -938,13 +938,13 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
 
     private func sectionViews(_ index: Int) -> [NSView] {
         switch index {
-        case 0:  return page("时区同步", "程序把系统时区切到出口 IP 对应的时区，这里显示当前是否已经一致。",
+        case 0:  return page("Синхронизация", "Часовой пояс системы определяется по внешнему IP. Здесь можно проверить результат.",
                              [sectionSyncCard()])
-        case 1:  return page("菜单栏", "菜单栏标题的显示方式。", [sectionMenuBarCard()])
-        case 2:  return page("启动", "登录后是否自动运行。", [sectionLoginCard()])
-        case 3:  return page("改时区方式", "改系统时区要提权，这里选走哪条通道。", [sectionBackendCard()])
-        case 4:  return page("维护", "诊断入口与本地文件位置。", [sectionMaintenanceCard()])
-        default: return page("关于", nil, [sectionAboutCard()])
+        case 1:  return page("Строка меню", "Отображение часов в строке меню.", [sectionMenuBarCard()])
+        case 2:  return page("Автозапуск", "Запуск приложения при входе в систему.", [sectionLoginCard()])
+        case 3:  return page("Смена часового пояса", "Для смены часового пояса нужны права администратора. Выберите способ авторизации.", [sectionBackendCard()])
+        case 4:  return page("Диагностика", "Журнал, диагностика и расположение настроек.", [sectionMaintenanceCard()])
+        default: return page("О программе", nil, [sectionAboutCard()])
         }
     }
 
@@ -965,7 +965,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
 
     private func sectionSyncCard() -> AZCard {
         let store = Store.shared
-        let syncSwitch = NSButton(checkboxWithTitle: "跟随出口 IP 自动同步系统时区",
+        let syncSwitch = NSButton(checkboxWithTitle: "Автоматически менять часовой пояс по внешнему IP",
                                   target: self, action: #selector(toggleSync(_:)))
         syncSwitch.state = store.syncEnabled ? .on : .off
 
@@ -982,14 +982,14 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         homeValue.textColor = .labelColor
         homeValue.lineBreakMode = .byTruncatingTail
         homeValue.toolTip = store.homeZone
-        let homeRow = vrow("归位时区", hstack([homeValue, button("更改…", #selector(pickHomeZone(_:)))]))
+        let homeRow = vrow("Домашний пояс", hstack([homeValue, button("Изменить…", #selector(pickHomeZone(_:)))]))
 
-        let autoHome = NSButton(checkboxWithTitle: "关闭跟随或退出程序时自动归位到该时区",
+        let autoHome = NSButton(checkboxWithTitle: "Возвращать этот пояс при отключении синхронизации и выходе",
                                 target: self, action: #selector(toggleAutoHome(_:)))
         autoHome.state = store.autoHome ? .on : .off
 
-        let btns = row(button("立即检查并同步", #selector(checkAndSync(_:))),
-                       button("仅查询（不改系统）", #selector(checkOnly(_:))))
+        let btns = row(button("Проверить и синхронизировать", #selector(checkAndSync(_:))),
+                       button("Только проверить", #selector(checkOnly(_:))))
 
         let card = AZCard([syncSwitch, table, sep, homeRow, autoHome, btns])
         card.stretch(table)
@@ -999,23 +999,23 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
     }
 
     private func sectionMenuBarCard() -> AZCard {
-        let secSwitch = NSButton(checkboxWithTitle: "在菜单栏标题里显示秒",
+        let secSwitch = NSButton(checkboxWithTitle: "Показывать секунды в строке меню",
                                  target: self, action: #selector(toggleSeconds(_:)))
         secSwitch.state = Store.shared.showSeconds ? .on : .off
         return AZCard([secSwitch,
-                       caption("标题格式跟随系统自带时钟（中文下即「10月3日 周六 08:18」）；"
-                               + "与系统时区不一致时变橙。")])
+                       caption("Формат часов совпадает с системным (например, «сб, 3 окт., 08:18»)."
+                               + " При отличии от системного пояса часы становятся оранжевыми.")])
     }
 
     private func sectionLoginCard() -> AZCard {
-        let loginSwitch = NSButton(checkboxWithTitle: "登录时自动启动",
+        let loginSwitch = NSButton(checkboxWithTitle: "Запускать при входе в систему",
                                    target: self, action: #selector(toggleLaunchAtLogin(_:)))
         loginSwitch.state = LoginItem.isEnabled ? .on : .off
         let path = NSTextField(labelWithString: tilde(LoginItem.plistURL.path))
         path.font = Theme.mono11
         path.textColor = .tertiaryLabelColor
         return AZCard([loginSwitch,
-                       caption("\(LoginItem.statusText)。可在「系统设置 → 通用 → 登录项」里撤销。"),
+                       caption("\(LoginItem.statusText). Отключить также можно в «Системные настройки → Основные → Объекты входа»."),
                        path])
     }
 
@@ -1023,35 +1023,35 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         let store = Store.shared
         let backendName: String
         switch store.privBackend {
-        case .helper:      backendName = "免授权助手（推荐）"
-        case .native:      backendName = "一次性授权 · 原生 Security.framework"
-        case .appleScript: backendName = "一次性授权 · AppleScript（回退）"
+        case .helper:      backendName = "Помощник (рекомендуется)"
+        case .native:      backendName = "Запрос пароля · Security.framework"
+        case .appleScript: backendName = "Запрос пароля · AppleScript"
         }
         let chip: (AZPill.Kind, String) = store.privBackend == .helper
-            ? (lastHelperOK ? .ok : .plain, lastHelperOK ? "已启用" : "未安装")
-            : (.plain, "已选中")
+            ? (lastHelperOK ? .ok : .plain, lastHelperOK ? "Включён" : "Не установлен")
+            : (.plain, "Выбран")
 
-        let btnInstall   = button(lastHelperOK ? "重新安装助手" : "安装免授权助手（推荐）",
+        let btnInstall   = button(lastHelperOK ? "Переустановить помощника" : "Установить помощника",
                                   #selector(installHelper(_:)))
-        let btnUninstall = button("卸载助手", #selector(uninstallHelper(_:)))
+        let btnUninstall = button("Удалить помощника", #selector(uninstallHelper(_:)))
         btnUninstall.isEnabled = lastHelperInstalled
 
-        let r1 = NSButton(radioButtonWithTitle: "免授权助手（推荐）",
+        let r1 = NSButton(radioButtonWithTitle: "Помощник (рекомендуется)",
                           target: self, action: #selector(useHelper(_:)))
-        let r2 = NSButton(radioButtonWithTitle: "一次性授权 · 原生 Security.framework",
+        let r2 = NSButton(radioButtonWithTitle: "Запрос пароля · Security.framework",
                           target: self, action: #selector(useNative(_:)))
-        let r3 = NSButton(radioButtonWithTitle: "一次性授权 · AppleScript（回退）",
+        let r3 = NSButton(radioButtonWithTitle: "Запрос пароля · AppleScript",
                           target: self, action: #selector(useAppleScript(_:)))
         r1.state = store.privBackend == .helper ? .on : .off
         r2.state = store.privBackend == .native ? .on : .off
         r3.state = store.privBackend == .appleScript ? .on : .off
 
         let card = AZCard([
-            vrow("当前通道", hstack([NSTextField(labelWithString: backendName), AZPill(chip.1, chip.0)])),
-            vrow("运行方式", secondary("launchd 按需拉起，不常驻")),
+            vrow("Способ", hstack([NSTextField(labelWithString: backendName), AZPill(chip.1, chip.0)])),
+            vrow("Работа", secondary("Запуск по запросу через launchd")),
             hrule(),
             row(btnInstall, btnUninstall),
-            caption("可选通道（改完立即生效）"),
+            caption("Способ авторизации (применяется сразу)"),
             r1, r2, r3,
         ])
         return card
@@ -1060,16 +1060,16 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
     private func sectionMaintenanceCard() -> AZCard {
         let store = Store.shared
         let rows: [(String, NSView)] = [
-            ("日志", mono(tilde(K.logPath))),
-            ("偏好", mono("~/Library/Preferences/\(bundleID).plist")),
-            ("上次动作", mono(store.lastAction)),
+            ("Журнал", mono(tilde(K.logPath))),
+            ("Настройки", mono("~/Library/Preferences/\(bundleID).plist")),
+            ("Последнее действие", mono(store.lastAction)),
         ]
         var content: [NSView] = [
-            row(button("打开「日期与时间」设置", #selector(openDateSettings(_:))),
-                button("打开系统日历", #selector(openCalendar(_:)))),
-            row(button("打开运行日志", #selector(openLog(_:))),
-                button("复制诊断信息", #selector(copyDiagnostics(_:)))),
-            row(button("测试通知", #selector(testNotification(_:)))),
+            row(button("Дата и время…", #selector(openDateSettings(_:))),
+                button("Открыть календарь", #selector(openCalendar(_:)))),
+            row(button("Открыть журнал", #selector(openLog(_:))),
+                button("Скопировать диагностику", #selector(copyDiagnostics(_:)))),
+            row(button("Проверить уведомления", #selector(testNotification(_:)))),
             hrule(),
         ]
         let kv = rows.map { vrow($0.0, $0.1) }
@@ -1082,15 +1082,15 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
 
     private func sectionAboutCard() -> AZCard {
         let rows: [(String, NSView)] = [
-            ("版本", mono("\(K.version) · \(bundleID)")),
-            ("开源仓库", mono("github.com/etng/autoz")),
-            ("许可证", mono("MIT License")),
-            ("文档", mono("docs/how-it-works.md · docs/troubleshooting.md")),
+            ("Версия", mono("\(K.version) · \(bundleID)")),
+            ("Репозиторий", mono("github.com/Mihaliks/autoz")),
+            ("Лицензия", mono("MIT License")),
+            ("Документация", mono("README.md (на русском)")),
         ]
         var content: [NSView] = [
-            caption("菜单栏常显东八区（UTC+8）时间；开启同步后按出口 IP 写入系统时区，"
-                    + "并关掉「自动设置时区」，随时可一键还原。出口 IP 走代理或 VPN 时，"
-                    + "解析出的是代理所在地。"),
+            caption("Часы в меню показывают пекинское время (UTC+8). Синхронизация меняет системный пояс по внешнему IP"
+                    + " и отключает автоматический выбор пояса macOS. Домашний пояс можно вернуть одной кнопкой. При использовании VPN или прокси"
+                    + " определяется местоположение сервера."),
             hrule(),
         ]
         let kv = rows.map { vrow($0.0, $0.1) }
@@ -1143,7 +1143,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         k.translatesAutoresizingMaskIntoConstraints = false
         k.setContentHuggingPriority(.required, for: .horizontal)
         k.setContentCompressionResistancePriority(.required, for: .horizontal)
-        k.widthAnchor.constraint(equalToConstant: 86).isActive = true
+        k.widthAnchor.constraint(equalToConstant: 124).isActive = true
         let s = NSStackView(views: [k, value])
         s.orientation = .horizontal
         s.alignment = .centerY
@@ -1172,7 +1172,7 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 
-    private func caption(_ text: String, maxWidth: CGFloat = 616) -> NSTextField {
+    private func caption(_ text: String, maxWidth: CGFloat = 680) -> NSTextField {
         let t = NSTextField(wrappingLabelWithString: text)
         t.font = .systemFont(ofSize: 12)
         t.textColor = .secondaryLabelColor
@@ -1193,11 +1193,11 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         let current = Store.shared.homeZone
         let items = TimeZone.knownTimeZoneIdentifiers.sorted().map { homeZonePickerItem($0) }
 
-        let host = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 78))
-        let hint = NSTextField(labelWithString: "输入片段筛选（shanghai / tokyo / los），或从列表里挑：")
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        let hint = NSTextField(labelWithString: "Введите часть названия (moscow / tokyo / los) или выберите из списка:")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
-        hint.frame = NSRect(x: 0, y: 58, width: 400, height: 16)
+        hint.frame = NSRect(x: 0, y: 76, width: 600, height: 16)
 
         let combo = NSComboBox()
         combo.usesDataSource = false
@@ -1205,32 +1205,32 @@ final class AdvancedWindowController: NSWindowController, NSTableViewDataSource,
         combo.numberOfVisibleItems = 12
         combo.addItems(withObjectValues: items)
         combo.stringValue = homeZonePickerItem(current)
-        combo.frame = NSRect(x: 0, y: 26, width: 400, height: 26)
+        combo.frame = NSRect(x: 0, y: 44, width: 600, height: 26)
 
-        let note = NSTextField(labelWithString: "关闭「跟随出口 IP」和退出 AutoZ 时，系统时区会写回这里。")
+        let note = NSTextField(wrappingLabelWithString: "Этот пояс возвращается при отключении синхронизации и выходе, если включён автовозврат.")
         note.font = .systemFont(ofSize: 11)
         note.textColor = .tertiaryLabelColor
-        note.frame = NSRect(x: 0, y: 2, width: 400, height: 16)
+        note.frame = NSRect(x: 0, y: 2, width: 600, height: 32)
 
         host.addSubview(hint)
         host.addSubview(combo)
         host.addSubview(note)
 
         let a = NSAlert()
-        a.messageText = "归位时区"
-        a.informativeText = "当前：\(homeZonePickerItem(current))"
-        a.addButton(withTitle: "保存")
-        a.addButton(withTitle: "取消")
+        a.messageText = "Домашний пояс"
+        a.informativeText = "Сейчас: \(homeZonePickerItem(current))"
+        a.addButton(withTitle: "Сохранить")
+        a.addButton(withTitle: "Отмена")
         a.accessoryView = host
         a.window.initialFirstResponder = combo
 
         guard a.runModal() == .alertFirstButtonReturn else { return }
         guard let id = zoneIDFromPickerInput(combo.stringValue) else {
             let bad = NSAlert()
-            bad.messageText = "认不出这个时区"
-            bad.informativeText = "「\(combo.stringValue)」无法匹配到唯一的时区标识，"
-                + "请用 IANA 名（例如 Asia/Shanghai）或更具体的片段。"
-            bad.addButton(withTitle: "知道了")
+            bad.messageText = "Часовой пояс не распознан"
+            bad.informativeText = "По запросу «\(combo.stringValue)» нельзя однозначно определить часовой пояс. "
+                + "Введите идентификатор IANA (например, Europe/Moscow) или уточните запрос."
+            bad.addButton(withTitle: "Понятно")
             bad.runModal()
             return
         }
@@ -1275,9 +1275,9 @@ final class ToastCenter {
     /// 注意：调用方可能在工作队列上（例如时区应用完成后），而创建 NSPanel 必须在主线程，
     /// 所以这里统一做一次主线程派发 —— 否则会以 NSException 崩掉。
     func post(title: String, message: String, sound: String? = "Glass") {
-        log("通知: \(title) — \(message)")
+        log("Уведомление: \(title) — \(message)")
         guard NSApp != nil else {
-            print("[通知] \(title) — \(message)")
+            print("[Уведомление] \(title) — \(message)")
             return
         }
         if Thread.isMainThread {
@@ -1430,7 +1430,7 @@ final class ToastPanel: NSPanel {
         alphaValue = 0
         setFrameOrigin(NSPoint(x: target.x + 28, y: target.y))
         orderFrontRegardless()
-        log("通知横幅已显示，frame=\(NSStringFromRect(NSRect(origin: target, size: size)))")
+        log("Уведомление показано, frame=\(NSStringFromRect(NSRect(origin: target, size: size)))")
 
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.26

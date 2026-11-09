@@ -52,7 +52,7 @@ enum K {
     static let version: String = {
         if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
            !v.isEmpty { return v }
-        return "0.9.0"
+        return "0.9.0-ru.1"
     }()
     static let logPath     = NSHomeDirectory() + "/Library/Logs/AutoZ.log"
     static let appSupport  = NSHomeDirectory() + "/Library/Application Support/AutoZ"
@@ -74,10 +74,10 @@ let bundleID = Bundle.main.bundleIdentifier ?? "cn.y10n.autoz"
 /// 与 bundle id 一样以构建期写入的 Info.plist 为准，直接跑裸二进制时回退到默认值。
 let appDisplayName: String =
     (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
-        .flatMap { $0.isEmpty ? nil : $0 } ?? "自适应时区"
+        .flatMap { $0.isEmpty ? nil : $0 } ?? "AutoZ — часовые пояса"
 
 /// 一句话定位，避免同一句话散落在多个界面里各自漂移。
-let appTagline = "菜单栏北京时间 + 出口 IP 同步系统时区"
+let appTagline = "Пекинское время в меню · Системный часовой пояс по IP"
 
 /// 菜单栏标题字体。
 ///
@@ -126,21 +126,21 @@ enum LoginItem {
 
     /// 状态的人话说明，直接显示在界面上
     static var statusText: String {
-        guard isEnabled else { return "未启用" }
+        guard isEnabled else { return "Выключен" }
         if executablePath.isEmpty || !FileManager.default.fileExists(atPath: executablePath) {
-            return "已启用，但记录的路径已失效 —— 关掉再开一次可修正"
+            return "Включён, но путь устарел. Выключите и включите автозапуск снова"
         }
         if !bundleInApplications {
-            return "已启用（App 当前不在「应用程序」里，移动后自启会失效）"
+            return "Включён (приложение вне папки «Программы»; после перемещения путь потребуется обновить)"
         }
-        return "已启用，下次登录自动启动"
+        return "Включён; запуск при следующем входе в систему"
     }
 
     /// 开启 / 关闭。成功返回 nil，失败返回原因（供提示与日志使用）。
     /// 写文件是即时的，但 launchd 要**下次登录**才会读取，所以界面文案不要写成「已生效」。
     static func set(_ on: Bool) -> String? {
         let fm = FileManager.default
-        guard !executablePath.isEmpty else { return "取不到 App 的可执行文件路径" }
+        guard !executablePath.isEmpty else { return "Не удалось определить путь к исполняемому файлу" }
 
         if on {
             do {
@@ -170,18 +170,18 @@ enum LoginItem {
     static func applyFirstRunDefault() {
         // 不在「应用程序」里就别登记，也**不要**置标记，等用户装好后下次启动再补
         guard bundleInApplications else {
-            log("首次运行：App 不在「应用程序」目录（\(Bundle.main.bundlePath)），跳过默认开启开机自启")
+            log("Первый запуск: приложение вне папки «Программы» (\(Bundle.main.bundlePath)); автозапуск не зарегистрирован")
             return
         }
         let key = "autoz.launchAtLogin.initialized"
         let d = UserDefaults.standard
-        guard d.object(forKey: key) == nil else { return }   // 已经处理过，尊重用户的当前选择
+        guard d.object(forKey: key) == nil else { return }   // 已经处理过, 尊重用户的当前选择
         d.set(true, forKey: key)
         guard !isEnabled else { return }
         if let err = set(true) {
-            log("首次运行：自动开启开机自启失败 —— \(err)")
+            log("Первый запуск: не удалось включить автозапуск — \(err)")
         } else {
-            log("首次运行：已默认开启开机自启（可在「高级配置 → 启动」里关掉）")
+            log("Первый запуск: автозапуск включён (отключается в настройках)")
         }
     }
 
@@ -248,7 +248,7 @@ func stamp(_ d: Date) -> String {
 @discardableResult
 func runProcess(_ path: String, _ args: [String]) -> (status: Int32, out: String, err: String) {
     guard FileManager.default.isExecutableFile(atPath: path) else {
-        return (-1, "", "不可执行: \(path)")
+        return (-1, "", "Файл не исполняемый: \(path)")
     }
     let p = Process()
     p.executableURL = URL(fileURLWithPath: path)
@@ -287,7 +287,7 @@ func notify(title: String, message: String, sound: String? = "Glass") {
 private let httpQueue = DispatchQueue(label: "autoz.http")
 
 func httpGetJSON(_ urlString: String, timeout: TimeInterval = 12) throws -> [String: Any] {
-    guard let url = URL(string: urlString) else { throw TZError.network("非法 URL: \(urlString)") }
+    guard let url = URL(string: urlString) else { throw TZError.network("Некорректный URL: \(urlString)") }
     var req = URLRequest(url: url)
     req.timeoutInterval = timeout
     req.cachePolicy = .reloadIgnoringLocalCacheData
@@ -307,12 +307,12 @@ func httpGetJSON(_ urlString: String, timeout: TimeInterval = 12) throws -> [Str
         } else { payload = data }
         sem.signal()
     }.resume()
-    if sem.wait(timeout: .now() + timeout + 5) == .timedOut { throw TZError.network("请求超时") }
+    if sem.wait(timeout: .now() + timeout + 5) == .timedOut { throw TZError.network("Время ожидания запроса истекло") }
     session.invalidateAndCancel()
     if let e = failure { throw e }
-    guard let data = payload, !data.isEmpty else { throw TZError.network("空响应") }
+    guard let data = payload, !data.isEmpty else { throw TZError.network("Пустой ответ") }
     guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-        throw TZError.network("响应不是 JSON 对象")
+        throw TZError.network("Ответ не является объектом JSON")
     }
     return obj
 }
@@ -325,10 +325,10 @@ enum TZError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .network(let s):     return "网络错误：\(s)"
-        case .noTimeZone(let s):  return "无法确定时区：\(s)"
-        case .shell(let s):       return "命令执行失败：\(s)"
-        case .cancelled:          return "已取消（未获管理员授权）"
+        case .network(let s):     return "Ошибка сети: \(s)"
+        case .noTimeZone(let s):  return "Не удалось определить часовой пояс: \(s)"
+        case .shell(let s):       return "Ошибка выполнения команды: \(s)"
+        case .cancelled:          return "Отменено (нет разрешения администратора)"
         }
     }
 }
@@ -388,11 +388,11 @@ enum Checker {
         var failures: [String] = []
         // 1) ipinfo.io（主源）
         if let det = try? fromIpinfo() { return det }
-        else { failures.append("ipinfo.io 失败") }
+        else { failures.append("Ошибка ipinfo.io") }
         // 2) ipwho.is（备源）
         if let det = try? fromIpwho() { return det }
-        else { failures.append("ipwho.is 失败") }
-        throw TZError.network(failures.joined(separator: "；"))
+        else { failures.append("Ошибка ipwho.is") }
+        throw TZError.network(failures.joined(separator: "; "))
     }
 
     private static func fromIpinfo() throws -> Detection {
@@ -410,7 +410,7 @@ enum Checker {
     private static func fromIpwho() throws -> Detection {
         let j = try httpGetJSON("https://ipwho.is/")
         if let ok = j["success"] as? Bool, ok == false {
-            throw TZError.network("ipwho.is 返回失败")
+            throw TZError.network("ipwho.is вернул ошибку")
         }
         let tz = (j["timezone"] as? [String: Any])?["id"] as? String
         return try build(json: j,
@@ -430,14 +430,14 @@ enum Checker {
 
         if let z = zone, isValidZoneID(z) {
             zoneID = z
-            zoneSource = "\(source) · timezone 字段"
+            zoneSource = "\(source) · поле timezone"
         } else if let cc = country.isEmpty ? nil : country.uppercased(), let z = singleZoneCountries[cc] {
             zoneID = z
-            zoneSource = "单时区国家回退表（\(cc)）"
+            zoneSource = "Таблица стран с одним часовым поясом (\(cc))"
         }
 
         guard !zoneID.isEmpty, let tz = TimeZone(identifier: zoneID) else {
-            throw TZError.noTimeZone("\(source) 未返回可用 timezone（原值 \(zone ?? "nil")）")
+            throw TZError.noTimeZone("\(source) не вернул корректный timezone (значение \(zone ?? "nil"))")
         }
         // 用 secOffset 做一次自检，确保可用
         _ = tz.secondsFromGMT(for: Date())
@@ -612,12 +612,12 @@ enum HelperChannel {
 
     /// 人类可读的通道状态（菜单/诊断用）
     static var statusText: String {
-        if !socketExists { return plistInstalled ? "已安装但 socket 未就绪" : "未安装（每次改时区都要输密码）" }
+        if !socketExists { return plistInstalled ? "Установлен, но сокет не готов" : "Не установлен (для каждой смены пояса нужен пароль)" }
         if let r = ping() {
-            let extra = (r.raw["zone"] as? String).map { " · 助手视角 \($0)" } ?? ""
-            return "已启用 · 零弹窗（重启也有效）" + extra
+            let extra = (r.raw["zone"] as? String).map { " · пояс по данным помощника: \($0)" } ?? ""
+            return "Готов · Без запроса пароля, в том числе после перезагрузки" + extra
         }
-        return socketExists ? "socket 在但无响应（可点「重新安装」修复）" : "未安装"
+        return socketExists ? "Сокет есть, но помощник не отвечает (переустановите его)" : "Не установлен"
     }
 }
 
@@ -653,18 +653,18 @@ struct PrivResult {
 
     var summary: String {
         let failed = executed.filter { $0.status != 0 && $0.status != -999 }
-        if cancelled { return "已取消授权" }
-        if ok || failed.isEmpty { return "全部 \(executed.count) 步成功" }
-        return "\(failed.count)/\(executed.count) 步失败：" + failed.map { "\($0.step) → \($0.status)" }.joined(separator: "；")
+        if cancelled { return "Авторизация отменена" }
+        if ok || failed.isEmpty { return "Выполнены все шаги: \(executed.count)" }
+        return "Ошибки на \(failed.count) из \(executed.count) шагов: " + failed.map { "\($0.step) → \($0.status)" }.joined(separator: "; ")
     }
 }
 
 /// 用一次授权执行整串特权命令。优先原生 Security.framework，不可用时回退 AppleScript。
 func runPrivilegedPlan(_ steps: [PrivStep], reason: String) -> PrivResult {
     if steps.isEmpty {
-        return PrivResult(ok: true, cancelled: false, backend: "无", executed: [], msg: "无需执行")
+        return PrivResult(ok: true, cancelled: false, backend: "нет", executed: [], msg: "Ничего выполнять не требуется")
     }
-    log("提权计划（\(reason)）共 \(steps.count) 步，后端=\(Store.shared.privBackend.rawValue)")
+    log("План с правами администратора (\(reason)): \(steps.count) шагов, способ=\(Store.shared.privBackend.rawValue)")
     for s in steps { log("  · \(s.display)\(s.note.map { "   ← \($0)" } ?? "")") }
 
     var nativeUnusable = false
@@ -674,7 +674,7 @@ func runPrivilegedPlan(_ steps: [PrivStep], reason: String) -> PrivResult {
         var ref: AuthorizationRef?
         let st = AuthorizationCreate(nil, nil, [.interactionAllowed, .extendRights, .preAuthorize], &ref)
         if st == errAuthorizationCanceled {
-            return PrivResult(ok: false, cancelled: true, backend: "native", executed: [], msg: "已取消授权")
+            return PrivResult(ok: false, cancelled: true, backend: "native", executed: [], msg: "Авторизация отменена")
         }
         if st == errAuthorizationSuccess, let auth = ref {
             defer { AuthorizationFree(auth, []) }
@@ -683,12 +683,12 @@ func runPrivilegedPlan(_ steps: [PrivStep], reason: String) -> PrivResult {
             for s in steps {
                 let status = execPrivileged(auth, s.tool, s.args)
                 executed.append((s.display, status, ""))
-                log("  原生 \(s.display) → \(status)")
+                log("  Security.framework: \(s.display) → \(status)")
                 if status == errAuthorizationCanceled {
                     return PrivResult(ok: false, cancelled: true, backend: "native", executed: executed,
-                                      msg: "已取消授权")
+                                      msg: "Авторизация отменена")
                 }
-                if status == -60031 {          // errAuthorizationToolExecuteFailure：符号失效
+                if status == -60031 {          // errAuthorizationToolExecuteFailure: 符号失效
                     nativeUnusable = true
                     break
                 }
@@ -697,33 +697,33 @@ func runPrivilegedPlan(_ steps: [PrivStep], reason: String) -> PrivResult {
             if !nativeUnusable {
                 Store.shared.lastBackend = "native"
                 return PrivResult(ok: allOK, cancelled: false, backend: "native", executed: executed,
-                                  msg: allOK ? "全部 \(executed.count) 步成功" : "有步骤失败")
+                                  msg: allOK ? "Выполнены все шаги: \(executed.count)" : "Не все шаги выполнены")
             }
-            log("原生提权返回 -60031 → 回退 AppleScript")
+            log("Security.framework вернул -60031 → переход на AppleScript")
         } else {
-            log("原生提权不可用：AuthorizationCreate -> \(st) → 回退 AppleScript")
+            log("Security.framework недоступен: AuthorizationCreate -> \(st) → переход на AppleScript")
         }
     }
     if Store.shared.privBackend == .native && nativeUnusable {
-        log("后端被固定为 native，但该 API 在本机不可用")
+        log("Выбран native, но этот API недоступен на этом Mac")
     }
 
     // ---- 后端 B：AppleScript 一次性授权 ----
     let cmds = steps.map { ([$0.tool] + $0.args).map(osaQuote).joined(separator: " ") }
     let script = "do shell script \(osaQuote(cmds.joined(separator: "; "))) with administrator privileges"
-    log("AppleScript 提权计划：\(cmds.count) 条命令")
+    log("План AppleScript: \(cmds.count) команд")
     let r = runProcess("/usr/bin/osascript", ["-e", script])
     Store.shared.lastBackend = "appleScript"
     if r.status != 0 {
         if r.err.contains("User canceled") || r.err.contains("-128") || r.err.contains("canceled") {
-            return PrivResult(ok: false, cancelled: true, backend: "appleScript", executed: [], msg: "已取消授权")
+            return PrivResult(ok: false, cancelled: true, backend: "appleScript", executed: [], msg: "Авторизация отменена")
         }
         return PrivResult(ok: false, cancelled: false, backend: "appleScript", executed: [],
                           msg: r.err.isEmpty ? "osascript status=\(r.status)" : r.err)
     }
-    log("AppleScript 提权返回: \(r.out)")
+    log("Ответ AppleScript: \(r.out)")
     return PrivResult(ok: true, cancelled: false, backend: "appleScript",
-                      executed: cmds.map { ($0, 0, "") }, msg: "全部 \(cmds.count) 步成功")
+                      executed: cmds.map { ($0, 0, "") }, msg: "Выполнены все шаги: \(cmds.count)")
 }
 
 // MARK: - 助手的安装 / 卸载（走一次性授权）
@@ -774,7 +774,7 @@ enum HelperInstaller {
     /// 把待安装的两个文件落到用户目录（非特权即可），后续由特权步骤搬进系统目录
     static func stage() throws -> (helper: String, plist: String) {
         guard let src = HelperChannel.binarySource else {
-            throw TZError.shell("找不到 autoz-helper（app bundle 里没有？请重新 build）")
+            throw TZError.shell("Файл autoz-helper не найден в приложении. Повторите сборку")
         }
         let dir = K.appSupport + "/install"
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -783,7 +783,7 @@ enum HelperInstaller {
         try? FileManager.default.removeItem(atPath: h)
         try FileManager.default.copyItem(atPath: src, toPath: h)
         try plistXML(allowUID: getuid()).write(toFile: p, atomically: true, encoding: .utf8)
-        log("已暂存安装文件：\(h) / \(p)")
+        log("Файлы установки подготовлены: \(h) / \(p)")
         return (h, p)
     }
 
@@ -797,10 +797,10 @@ enum HelperInstaller {
             PrivStep("/usr/sbin/chown", ["root:wheel", HelperK.plistPath]),
             PrivStep("/bin/chmod", ["644", HelperK.plistPath]),
             PrivStep("/bin/launchctl", ["bootout", "system/\(HelperK.label)"],
-                     note: "未加载时会失败，忽略", ignoreFailure: true),
+                     note: "Ошибка допустима, если служба не загружена", ignoreFailure: true),
             // 必须在 bootstrap 之前清旧 socket —— 放在后面会把 launchd 刚建好的 socket 删掉
             PrivStep("/bin/rm", ["-f", HelperK.socketPath],
-                     note: "清掉上次遗留的 socket，让 launchd 重建", ignoreFailure: true),
+                     note: "Удалить старый сокет, чтобы launchd создал новый", ignoreFailure: true),
             PrivStep("/bin/launchctl", ["bootstrap", "system", HelperK.plistPath]),
         ]
     }
@@ -811,7 +811,7 @@ enum HelperInstaller {
     static func uninstallSteps() -> [PrivStep] {
         [
             PrivStep("/bin/launchctl", ["bootout", "system/\(HelperK.label)"],
-                     note: "未加载时会失败，忽略", ignoreFailure: true),
+                     note: "Ошибка допустима, если служба не загружена", ignoreFailure: true),
             PrivStep("/bin/rm", ["-f", HelperK.plistPath]),
             PrivStep("/bin/rm", ["-f", HelperK.binPath]),
             PrivStep("/bin/rm", ["-f", HelperK.socketPath], ignoreFailure: true),
@@ -830,53 +830,53 @@ enum HelperInstaller {
 
     static func install() -> (ok: Bool, text: String) {
         guard HelperChannel.binarySource != nil else {
-            return (false, "找不到 autoz-helper，请先重新 build（./build.sh）")
+            return (false, "Файл autoz-helper не найден. Выполните ./build.sh")
         }
         if HelperChannel.ping() != nil {
-            return (true, "免授权助手已经在运行，无需重复安装。")
+            return (true, "Помощник уже работает; повторная установка не требуется.")
         }
         let staged: (helper: String, plist: String)
         do { staged = try stage() } catch { return (false, error.localizedDescription) }
 
-        let r = runPrivilegedPlan(installSteps(staged: staged), reason: "安装免授权助手")
-        if r.cancelled { return (false, "已取消授权，未安装（改时区仍会每次弹框）。") }
-        if !r.ok { return (false, "安装失败：\(r.summary)") }
+        let r = runPrivilegedPlan(installSteps(staged: staged), reason: "Установка помощника")
+        if r.cancelled { return (false, "Авторизация отменена. Помощник не установлен; для смены пояса по-прежнему нужен пароль.") }
+        if !r.ok { return (false, "Ошибка установки: \(r.summary)") }
 
         if waitUntilReady() {
-            return (true, "免授权助手已装好：以后改时区不再弹授权框，重启系统也有效。")
+            return (true, "Помощник установлен. Часовой пояс можно менять без запроса пароля, в том числе после перезагрузки.")
         }
-        return (false, "文件已就位，但助手没有响应。可看日志 \(HelperK.logPath)，或重启一次系统让它被 launchd 加载。")
+        return (false, "Файлы установлены, но помощник не отвечает. Проверьте журнал \(HelperK.logPath) или перезагрузите Mac.")
     }
 
     static func uninstall() -> (ok: Bool, text: String) {
-        let r = runPrivilegedPlan(uninstallSteps(), reason: "卸载免授权助手")
-        if r.cancelled { return (false, "已取消授权，未卸载。") }
-        if !r.ok { return (false, "卸载失败：\(r.summary)") }
+        let r = runPrivilegedPlan(uninstallSteps(), reason: "Удаление помощника")
+        if r.cancelled { return (false, "Авторизация отменена. Помощник не удалён.") }
+        if !r.ok { return (false, "Ошибка удаления: \(r.summary)") }
         let leftovers = removablePaths.filter { FileManager.default.fileExists(atPath: $0) }
         if leftovers.isEmpty {
-            return (true, "免授权助手已卸载，改时区会恢复成每次弹授权框。")
+            return (true, "Помощник удалён. Для каждой смены пояса снова потребуется пароль.")
         }
-        return (false, "部分文件仍在：\(leftovers.joined(separator: "、"))")
+        return (false, "Некоторые файлы остались: \(leftovers.joined(separator: ", "))")
     }
 }
 
 // MARK: - 提权后端
 
 enum PrivBackend: String {
-    case helper      = "helper"       // 免授权助手（默认）：装过就零弹窗
-    case native      = "native"       // 一次性授权：Security.framework
-    case appleScript = "appleScript"  // 一次性授权：osascript
+    case helper      = "helper"       // Без запроса пароля助手 (默认): 装过就零弹窗
+    case native      = "native"       // 一次性授权: Security.framework
+    case appleScript = "appleScript"  // 一次性授权: osascript
     var label: String {
         switch self {
-        case .helper:      return "免授权助手（推荐）"
-        case .native:      return "一次性授权 · 原生"
-        case .appleScript: return "一次性授权 · AppleScript"
+        case .helper:      return "Помощник (рекомендуется)"
+        case .native:      return "Запрос пароля · Security.framework"
+        case .appleScript: return "Запрос пароля · AppleScript"
         }
     }
     var short: String {
         switch self {
-        case .helper:      return "免授权"
-        case .native:      return "原生"
+        case .helper:      return "Без запроса пароля"
+        case .native:      return "Security.framework"
         case .appleScript: return "AppleScript"
         }
     }
@@ -903,7 +903,7 @@ func zoneSteps(zoneID: String, autoTZ: Bool?) -> [PrivStep] {
     }
     steps.append(PrivStep("/usr/sbin/systemsetup", ["-settimezone", zoneID]))
     steps.append(PrivStep("/bin/ln", ["-sfn", K.zoneRoot + zoneID, "/etc/localtime"],
-                          note: "systemsetup 未生效时的兜底"))
+                          note: "Резервный способ, если systemsetup не сработал"))
     steps.append(PrivStep("/usr/bin/notifyutil", ["-p", "com.apple.system.timezone"]))
     return steps
 }
@@ -916,14 +916,14 @@ func verifyZone(_ zoneID: String) -> ApplyOutcome {
        a.secondsFromGMT(for: Date()) == b.secondsFromGMT(for: Date()) {
         return .changed(zoneID)
     }
-    return .failed("写入后校验不一致（当前 /etc/localtime → \(now.isEmpty ? "未知" : now)）")
+    return .failed("Проверка после записи не пройдена (/etc/localtime → \(now.isEmpty ? "неизвестно" : now))")
 }
 
 /// 设置系统时区（可选同时设自动时区开关）。
 /// 通道优先级：免授权助手（零弹窗） → 一次性授权（原生 Security.framework → AppleScript）
 func applySystemZone(_ zoneID: String, autoTZ: Bool? = nil) -> ApplyOutcome {
     guard isValidZoneID(zoneID) else {
-        return .failed("时区标识非法：\(zoneID)")
+        return .failed("Некорректный идентификатор пояса: \(zoneID)")
     }
     let needZone = systemZoneID() != zoneID
     let needAuto = autoTZ.map { autoTimeZoneEnabled() != $0 } ?? false
@@ -936,24 +936,24 @@ func applySystemZone(_ zoneID: String, autoTZ: Bool? = nil) -> ApplyOutcome {
         if HelperChannel.socketExists {
             if let r = HelperChannel.setZone(zoneID, auto: needAuto ? autoTZ : nil) {
                 if r.ok {
-                    Store.shared.lastBackend = "helper（免授权）"
-                    log("助手通道成功: \(r.msg) → zone=\(r.zone ?? "?") auto=\(r.auto.map(String.init) ?? "-")")
+                    Store.shared.lastBackend = "helper (без запроса пароля)"
+                    log("Помощник выполнил запрос: \(r.msg) → zone=\(r.zone ?? "?") auto=\(r.auto.map(String.init) ?? "-")")
                     return verifyZone(zoneID)
                 }
                 // 助手明确拒绝或执行失败 → 直接报错。不再弹授权框：明知失败还打扰用户没有意义
-                Store.shared.lastBackend = "helper（失败）"
-                log("助手通道失败: \(r.msg)")
-                return .failed(r.msg.isEmpty ? "助手拒绝执行（可能时区不在白名单）" : r.msg)
+                Store.shared.lastBackend = "helper (ошибка)"
+                log("Ошибка помощника: \(r.msg)")
+                return .failed(r.msg.isEmpty ? "Помощник отклонил запрос (пояс может отсутствовать в списке разрешённых)" : r.msg)
             }
-            log("助手 socket 存在但无响应 → 回退一次性授权")
+            log("Сокет помощника есть, но ответа нет → запрос пароля")
         } else {
-            log("未安装免授权助手 → 走一次性授权（本次会弹授权框）")
+            log("Помощник не установлен → запрос пароля администратора")
         }
     }
 
     // ---------- 通道 1/2：一次性授权 ----------
     let r = runPrivilegedPlan(zoneSteps(zoneID: zoneID, autoTZ: needAuto ? autoTZ : nil),
-                             reason: "设置系统时区 → \(zoneID)")
+                             reason: "Установить системный пояс → \(zoneID)")
     if r.cancelled { return .cancelled }
     if !r.ok { return .failed(r.summary) }
     return verifyZone(zoneID)
@@ -987,7 +987,7 @@ private func applyHourOverride(_ pattern: String) -> String {
 func titlePattern(showSeconds: Bool) -> String {
     let raw = DateFormatter.dateFormat(fromTemplate: "MMMdEEEjmm" + (showSeconds ? "ss" : ""),
                                        options: 0, locale: Locale.current)
-        ?? (showSeconds ? "M月d日 EEE HH:mm:ss" : "M月d日 EEE HH:mm")
+        ?? (showSeconds ? "EEE, d MMM HH:mm:ss" : "EEE, d MMM HH:mm")
     return applyHourOverride(raw)
 }
 
@@ -1007,17 +1007,11 @@ func formatter(pattern: String, zone: TimeZone) -> DateFormatter {
     return f
 }
 
-// MARK: 中文单语 UI 的固定 locale
-//
-// 「期望时区」「中国标准时间」这些标签全是写死在代码里的中文，程序没有本地化表。
-// 日期/时刻如果跟着 `Locale.current` 走，在 en_US 机器上（比如 CI 的 macOS runner）
-// 就会渲染出 "Sat, Oct 3  1:38:41 AM" 夹在一堆中文标签中间 —— 0.8.8 的发布流水线
-// 正是这样把问题暴露出来的，本机 zh_CN 永远看不到。
-//
-// **菜单栏标题是唯一例外**：它就贴在系统时钟旁边，格式必须跟随系统（见 titlePattern）。
-let uiLocale = Locale(identifier: "zh_CN")
+// MARK: - Русский интерфейс
+// Даты и названия часовых поясов в меню и настройках используют ru_RU.
+// Часы в строке меню сохраняют системную локаль и настройку 12/24 часов.
+let uiLocale = Locale(identifier: "ru_RU")
 
-/// 固定 zh_CN 的模板。不做 12/24 小时覆盖 —— 设计稿口径就是 24 小时制 `17:35:54`。
 func uiPattern(_ template: String, fallback: String) -> String {
     DateFormatter.dateFormat(fromTemplate: template, options: 0, locale: uiLocale) ?? fallback
 }
@@ -1043,7 +1037,7 @@ func beijingClockText(showSeconds: Bool) -> String {
 }
 
 func beijingDateText() -> String {
-    uiFormatter(pattern: uiPattern("yMMMdEEE", fallback: "yyyy年M月d日 EEE"),
+    uiFormatter(pattern: uiPattern("yMMMdEEE", fallback: "EEE, d MMM yyyy"),
                 zone: beijingZone()).string(from: Date())
 }
 
@@ -1093,12 +1087,12 @@ func zonedTimeText(_ tz: TimeZone, showSeconds: Bool, at date: Date = Date()) ->
 /// 相对东八区的时差："比东八区晚 15 小时" / "比东八区早 30 分" / "与东八区一致"
 func beijingDeltaText(_ tz: TimeZone, at date: Date = Date()) -> String {
     let mins = (tz.secondsFromGMT(for: date) - beijingZone().secondsFromGMT(for: date)) / 60
-    if mins == 0 { return "与东八区一致" }
+    if mins == 0 { return "Совпадает с UTC+8" }
     let a = abs(mins), h = a / 60, m = a % 60
     var amount = ""
-    if h > 0 { amount += "\(h) 小时" }
-    if m > 0 { amount += (h > 0 ? " " : "") + "\(m) 分" }
-    return (mins > 0 ? "比东八区早 " : "比东八区晚 ") + amount
+    if h > 0 { amount += "\(h) ч" }
+    if m > 0 { amount += (h > 0 ? " " : "") + "\(m) мин" }
+    return (mins > 0 ? "Впереди UTC+8 на " : "Позади UTC+8 на ") + amount
 }
 
 /// 相对东八区的时差，**紧凑写法**：`-15h` / `+1h` / `-2.5h`；一致时返回空串。
@@ -1114,10 +1108,10 @@ func beijingDeltaShort(_ tz: TimeZone, at date: Date = Date()) -> String {
 
 /// 时区的中文名（ICU 通用名）：中国标准时间 / 北美太平洋时间 / 英国时间 …
 /// 拿不到就退回 IANA id，避免界面上出现空白。
-func zoneCNName(_ tz: TimeZone) -> String {
-    let zh = Locale(identifier: "zh_CN")
-    return tz.localizedName(for: .generic, locale: zh)
-        ?? tz.localizedName(for: .standard, locale: zh)
+func localizedZoneName(_ tz: TimeZone) -> String {
+    let ru = uiLocale
+    return tz.localizedName(for: .generic, locale: ru)
+        ?? tz.localizedName(for: .standard, locale: ru)
         ?? tz.identifier
 }
 
@@ -1136,7 +1130,7 @@ func zoneChipText(_ tz: TimeZone, at date: Date = Date()) -> String {
 /// 仅日期 + 星期（"10月3日 周六"）—— 状态表时间列的上半行。
 /// locale 固定 zh_CN：与同一张表里的中文标签保持一致，不随系统语言漂成 "Sat, Oct 3"。
 func zonedDateText(_ tz: TimeZone, at date: Date = Date()) -> String {
-    uiFormatter(pattern: uiPattern("MMMdEEE", fallback: "M月d日 EEE"), zone: tz).string(from: date)
+    uiFormatter(pattern: uiPattern("MMMdEEE", fallback: "EEE, d MMM"), zone: tz).string(from: date)
 }
 
 /// 仅时刻（"17:35:54"）—— 状态表时间列的下半行。**始终带秒**：
@@ -1147,7 +1141,7 @@ func zonedClockText(_ tz: TimeZone, at date: Date = Date()) -> String {
 
 /// 时区整行标识：中文名 · 字母缩写 · UTC 偏移（菜单与高级配置窗口共用同一口径）
 func zoneLineText(_ tz: TimeZone, at date: Date = Date()) -> String {
-    "\(zoneCNName(tz)) · \(zoneChipText(tz, at: date))"
+    "\(localizedZoneName(tz)) · \(zoneChipText(tz, at: date))"
 }
 
 /// 出口行尾注：出口时区与系统时区**不同**时补上「那边的时间 + 徽标」——
@@ -1190,139 +1184,95 @@ func systemTimeZone() -> TimeZone {
 /// 覆盖「菜单里能同时看到时区标识与该地区的当地时间」这条用户明确提出的诉求。
 func runTZSelfTest() -> Int {
     var pass = 0, fail = 0
-    func ok(_ name: String) { pass += 1; print("  ✓ \(name)") }
-    func bad(_ name: String, _ detail: String) { fail += 1; print("  ✗ \(name)  —— \(detail)") }
-    func eq(_ name: String, _ got: String, _ want: String) {
-        got == want ? ok("\(name): \(got)") : bad(name, "得到「\(got)」，期望「\(want)」")
+    func yes(_ name: String, _ condition: Bool, _ detail: String = "") {
+        if condition { pass += 1; print("  ✓ \(name)") }
+        else { fail += 1; print("  ✗ \(name): \(detail)") }
     }
-    func yes(_ name: String, _ cond: Bool, _ detail: String = "") {
-        cond ? ok(name) : bad(name, detail)
+    func eq(_ name: String, _ got: String, _ want: String) {
+        yes(name, got == want, "получено «\(got)», ожидалось «\(want)»")
     }
     func tz(_ id: String) -> TimeZone { TimeZone(identifier: id)! }
+    let winter = Date(timeIntervalSince1970: 1768478400) // 2026-01-15 12:00 UTC
+    let summer = Date(timeIntervalSince1970: 1782907200) // 2026-07-01 12:00 UTC
 
-    // 北美冬令时 / 夏令时各取一个固定时刻：用来验证缩写（PST↔PDT）确实随季节切换
-    let winter = Date(timeIntervalSince1970: 1768478400)   // 2026-01-15 12:00 UTC
-    let summer = Date(timeIntervalSince1970: 1782907200)   // 2026-07-01 12:00 UTC
+    print("── Смещения UTC и сезонные сокращения ──")
+    for (seconds, expected) in [(28800, "UTC+8"), (-25200, "UTC-7"), (19800, "UTC+5:30"), (0, "UTC")] {
+        eq("Смещение \(seconds)", utcOffsetText(seconds: seconds), expected)
+    }
+    for (id, date, expected) in [
+        ("America/Los_Angeles", winter, "PST (UTC-8)"),
+        ("America/Los_Angeles", summer, "PDT (UTC-7)"),
+        ("America/New_York", summer, "EDT (UTC-4)"),
+        ("America/Chicago", winter, "CST (UTC-6)"),
+        ("Asia/Shanghai", winter, "UTC+8"), ("Asia/Tokyo", winter, "UTC+9"),
+        ("Australia/Sydney", winter, "UTC+11"), ("Europe/London", summer, "UTC+1")
+    ] { eq("\(id): \(expected)", zoneBadge(tz(id), at: date), expected) }
+    eq("Фиксированный пояс", zoneBadge(TimeZone(secondsFromGMT: -25200)!, at: winter), "UTC-7")
 
-    print("── UTC 偏移格式 ──")
-    eq("utcOffsetText(+8h)", utcOffsetText(seconds: 8 * 3600), "UTC+8")
-    eq("utcOffsetText(-7h)", utcOffsetText(seconds: -7 * 3600), "UTC-7")
-    eq("utcOffsetText(+5:30)", utcOffsetText(seconds: 5 * 3600 + 1800), "UTC+5:30")
-    eq("utcOffsetText(0)", utcOffsetText(seconds: 0), "UTC")
+    print("── Русские подписи разницы во времени ──")
+    for (id, date, expected) in [
+        ("America/Los_Angeles", winter, "Позади UTC+8 на 16 ч"),
+        ("America/Los_Angeles", summer, "Позади UTC+8 на 15 ч"),
+        ("Asia/Tokyo", winter, "Впереди UTC+8 на 1 ч"),
+        ("Asia/Shanghai", winter, "Совпадает с UTC+8"),
+        ("Asia/Kolkata", winter, "Позади UTC+8 на 2 ч 30 мин")
+    ] { eq(id, beijingDeltaText(tz(id), at: date), expected) }
+    for (id, date, expected) in [
+        ("America/Los_Angeles", summer, "-15h"), ("America/Los_Angeles", winter, "-16h"),
+        ("Asia/Tokyo", winter, "+1h"), ("Asia/Kolkata", winter, "-2.5h"), ("Asia/Shanghai", winter, "")
+    ] { eq("Краткая разница: \(id)", beijingDeltaShort(tz(id), at: date), expected) }
 
-    print("── 字母缩写 + UTC 偏移（含夏令时切换）──")
-    eq("洛杉矶·冬", zoneBadge(tz("America/Los_Angeles"), at: winter), "PST (UTC-8)")
-    eq("洛杉矶·夏", zoneBadge(tz("America/Los_Angeles"), at: summer), "PDT (UTC-7)")
-    eq("纽约·夏", zoneBadge(tz("America/New_York"), at: summer), "EDT (UTC-4)")
-    eq("芝加哥·冬", zoneBadge(tz("America/Chicago"), at: winter), "CST (UTC-6)")
-    // ICU 对没有通行字母缩写的时区会返回 GMT+8 之类（刻意规避 CST 这类歧义缩写），
-    // 这种情况应统一退回 UTC 偏移，而不是显示成 "GMT+8"。
-    eq("上海（ICU 不给 CST）", zoneBadge(tz("Asia/Shanghai"), at: winter), "UTC+8")
-    eq("东京（ICU 不给 JST）", zoneBadge(tz("Asia/Tokyo"), at: winter), "UTC+9")
-    eq("悉尼·冬（南半球夏令时）", zoneBadge(tz("Australia/Sydney"), at: winter), "UTC+11")
-    eq("伦敦·夏（ICU 不给 BST）", zoneBadge(tz("Europe/London"), at: summer), "UTC+1")
-    eq("固定偏移时区不显示 GMT-7", zoneBadge(TimeZone(secondsFromGMT: -7 * 3600)!, at: winter), "UTC-7")
+    print("── Местное время, русские даты и названия ──")
+    let bj = zonedTimeText(beijingZone(), showSeconds: false, at: winter)
+    let tokyo = zonedTimeText(tz("Asia/Tokyo"), showSeconds: false, at: winter)
+    let la = zonedTimeText(tz("America/Los_Angeles"), showSeconds: false, at: winter)
+    yes("Токио отличается от Лос-Анджелеса", tokyo != la)
+    yes("Токио отличается от Пекина", tokyo != bj)
+    eq("Одинаковый пояс — одинаковое время", zonedTimeText(tz("Asia/Shanghai"), showSeconds: false, at: winter), bj)
+    eq("Одинаковые пояса без повтора времени", exitZoneSuffix(exitZone: tz("America/Los_Angeles"), systemZone: tz("America/Los_Angeles"), at: winter), "")
+    let suffix = exitZoneSuffix(exitZone: beijingZone(), systemZone: tz("America/Los_Angeles"), at: winter)
+    yes("Другой пояс содержит UTC+8", suffix.contains("UTC+8"))
+    yes("Другой пояс содержит время", suffix.contains(":"))
+    yes("Название Пекина по-русски", localizedZoneName(beijingZone()).range(of: #"[А-Яа-яЁё]"#, options: .regularExpression) != nil)
+    yes("Название Лос-Анджелеса по-русски", localizedZoneName(tz("America/Los_Angeles")).range(of: #"[А-Яа-яЁё]"#, options: .regularExpression) != nil)
+    eq("Значок Пекина", zoneChipText(beijingZone(), at: winter), "CST · UTC+8")
+    eq("Значок Лос-Анджелеса летом", zoneChipText(tz("America/Los_Angeles"), at: summer), "PDT · UTC-7")
+    eq("Значок Токио", zoneChipText(tz("Asia/Tokyo"), at: winter), "UTC+9")
+    let bjClock = zonedClockText(beijingZone(), at: winter)
+    yes("Часы Пекина и Лос-Анджелеса отличаются", bjClock != zonedClockText(tz("America/Los_Angeles"), at: winter))
+    yes("Время содержит секунды", bjClock.filter { $0 == ":" }.count == 2)
+    let date = zonedDateText(beijingZone(), at: winter)
+    yes("Дата на русском", date.contains("янв") && date.contains("15"), date)
 
-    print("── 相对东八区的时差 ──")
-    eq("洛杉矶·冬", beijingDeltaText(tz("America/Los_Angeles"), at: winter), "比东八区晚 16 小时")
-    eq("洛杉矶·夏", beijingDeltaText(tz("America/Los_Angeles"), at: summer), "比东八区晚 15 小时")
-    eq("东京", beijingDeltaText(tz("Asia/Tokyo"), at: winter), "比东八区早 1 小时")
-    eq("上海", beijingDeltaText(tz("Asia/Shanghai"), at: winter), "与东八区一致")
-    eq("加尔各答（半小时偏移）", beijingDeltaText(tz("Asia/Kolkata"), at: winter), "比东八区晚 2 小时 30 分")
-
-    print("── 当地时间确实按传入时区渲染（防「忘了切时区」）──")
-    let bjText = zonedTimeText(beijingZone(), showSeconds: false, at: winter)
-    let tkText = zonedTimeText(tz("Asia/Tokyo"), showSeconds: false, at: winter)
-    let laText = zonedTimeText(tz("America/Los_Angeles"), showSeconds: false, at: winter)
-    yes("东京渲染 ≠ 洛杉矶渲染", tkText != laText, "两边都是「\(tkText)」")
-    yes("东京渲染 ≠ 东八区渲染", tkText != bjText, "两边都是「\(bjText)」")
-    eq("同时刻同偏移 → 渲染一致", zonedTimeText(tz("Asia/Shanghai"), showSeconds: false, at: winter), bjText)
-    print("     东八区=\(bjText)   东京=\(tkText)   洛杉矶=\(laText)")
-
-    print("── 出口时区与系统时区不同 → 出口行补对方的时间 ──")
-    let laZone = tz("America/Los_Angeles")
-    eq("两者相同 → 不重复显示", exitZoneSuffix(exitZone: laZone, systemZone: laZone, at: winter), "")
-    let s1 = exitZoneSuffix(exitZone: tz("Asia/Shanghai"), systemZone: laZone, at: winter)
-    yes("不同 → 带 UTC+8", s1.contains("UTC+8"), "得到「\(s1)」")
-    yes("不同 → 带具体时间", s1.contains(":"), "得到「\(s1)」")
-
-    print("── 紧凑时差（只出现在「是否有差别」那一行）──")
-    eq("洛杉矶·夏", beijingDeltaShort(tz("America/Los_Angeles"), at: summer), "-15h")
-    eq("洛杉矶·冬", beijingDeltaShort(tz("America/Los_Angeles"), at: winter), "-16h")
-    eq("东京", beijingDeltaShort(tz("Asia/Tokyo"), at: winter), "+1h")
-    eq("加尔各答（半小时偏移）", beijingDeltaShort(tz("Asia/Kolkata"), at: winter), "-2.5h")
-    eq("东八区自己 → 空串（整条不显示）", beijingDeltaShort(beijingZone(), at: winter), "")
-
-    print("── 中文时区名 + 徽章（窗口与菜单共用同一批函数）──")
-    eq("东八区", zoneLineText(beijingZone(), at: winter), "中国标准时间 · CST · UTC+8")
-    eq("洛杉矶·夏", zoneLineText(tz("America/Los_Angeles"), at: summer), "北美太平洋时间 · PDT · UTC-7")
-    eq("东京（ICU 不给 JST）", zoneChipText(tz("Asia/Tokyo"), at: winter), "UTC+9")
-
-    print("── 状态表时间列：日期与时刻分开给 ──")
-    let bjC = zonedClockText(beijingZone(), at: winter)
-    let laC = zonedClockText(tz("America/Los_Angeles"), at: winter)
-    yes("东八区时刻 ≠ 洛杉矶时刻", bjC != laC, "两边都是「\(bjC)」")
-    yes("时刻列带秒（两个冒号）", bjC.filter { $0 == ":" }.count == 2, bjC)
-    yes("日期列含「月」和「日」", zonedDateText(beijingZone(), at: winter).contains("月")
-        && zonedDateText(beijingZone(), at: winter).contains("日"), zonedDateText(beijingZone(), at: winter))
-    print("     东八区=\(zonedDateText(beijingZone(), at: winter)) \(bjC)   洛杉矶=\(zonedDateText(tz("America/Los_Angeles"), at: winter)) \(laC)")
-
-    print("── 菜单：三行状态，每行都要带标识 + 当地时间 ──")
+    print("── Меню и домашний пояс ──")
     let lines = AppDelegate().menuPreviewText().components(separatedBy: "\n")
-    func lineHas(_ key: String, _ pattern: String) -> (Bool, String) {
-        guard let l = lines.first(where: { $0.contains(key) }) else { return (false, "没有含「\(key)」的行") }
-        let r = try! NSRegularExpression(pattern: pattern)
-        return (r.firstMatch(in: l, range: NSRange(l.startIndex..<l.endIndex, in: l)) != nil,
-                l.trimmingCharacters(in: .whitespaces))
+    func lineHas(_ key: String, _ pattern: String) -> Bool {
+        guard let line = lines.first(where: { $0.contains(key) }) else { return false }
+        return line.range(of: pattern, options: .regularExpression) != nil
     }
-    let (h1, l1) = lineHas("东八区", #"\d{1,3}:\d{2}:\d{2}"#)
-    yes("东八区行带时刻", h1, l1)
-    // 系统时区正好是 UTC 时（CI 的 runner 就是），徽章只有 "UTC"——偏移 0 不加符号，
-    // 所以不能要求 UTC 后面必须跟数字；改成要求它以徽章形式出现在 "·" 之后。
-    let (h2, l2) = lineHas("系统时区", #"·\s*UTC([+-]\d+(:\d{2})?)?"#)
-    yes("系统时区行带 UTC 徽章", h2, l2)
-    let (h3, l3) = lineHas("系统时区", #"\d{1,3}:\d{2}:\d{2}"#)
-    yes("系统时区行带当地时间", h3, l3)
-    // 系统时区正好落在东八区时不显示时差（属正常），此时跳过这一条断言
+    yes("UTC+8 содержит время", lineHas("UTC+8", #"\d{1,3}:\d{2}:\d{2}"#))
+    yes("Системный пояс содержит UTC", lineHas("Системный пояс", #"·\s*UTC([+-]\d+(:\d{2})?)?"#))
+    yes("Системный пояс содержит местное время", lineHas("Системный пояс", #"\d{1,3}:\d{2}:\d{2}"#))
     if systemTimeZone().secondsFromGMT(for: Date()) != beijingZone().secondsFromGMT(for: Date()) {
-        let (h4, l4) = lineHas("系统时区", #"[+-]\d+(\.\d+)?h"#)
-        yes("系统时区行带相对东八区的时差", h4, l4)
-    } else {
-        yes("系统时区即东八区 → 不显示时差（跳过）", true)
+        yes("Системный пояс содержит разницу", lineHas("Системный пояс", #"[+-]\d+(\.\d+)?h"#))
     }
-
-    print("── 归位时区：恢复目标固定为配置值，不再吃被写脏的旧快照 ──")
     let homeID = Store.shared.homeZone
     let homeTZ = TimeZone(identifier: homeID)
-    yes("归位时区是合法 IANA 标识", homeTZ != nil, homeID)
-    // 匹配必须带左括号：同步开启时菜单首项是「关闭同步并回到归位时区」，
-    // 它只是**刚好也含这几个字**、且不带时区名（正文在 tooltip 里）。
-    // 用裸的 contains("回到归位时区") 会随同步开关的开/关命中不同的行，
-    // 断言跟着本机状态漂 —— 2026-10-11 在 syncEnabled=true 的机器上挂过一项。
-    let homeLine = lines.first { $0.contains("回到归位时区（") } ?? ""
-    yes("菜单含「回到归位时区（…）」项", !homeLine.isEmpty, homeLine)
-    yes("该菜单项写出归位时区的中文名",
-        homeLine.contains(homeTZ.map { zoneCNName($0) } ?? homeID), homeLine)
-    yes("菜单不再出现旧口径「恢复到开启前的时区」",
-        !lines.contains { $0.contains("恢复到开启前的时区") })
-
-    print("── 归位时区选择器：整行 / 片段 / 歧义 / 空输入 ──")
+    yes("Домашний пояс — допустимый IANA ID", homeTZ != nil, homeID)
+    let homeLine = lines.first { $0.contains("Вернуть домашний пояс (") } ?? ""
+    yes("Возврат домашнего пояса есть в меню", !homeLine.isEmpty)
+    yes("Меню содержит название домашнего пояса", homeLine.contains(homeTZ.map { localizedZoneName($0) } ?? homeID))
+    yes("Нет старого возврата к снимку", !lines.contains { $0.contains("Восстановить пояс до включения") })
     let item = homeZonePickerItem("Asia/Shanghai")
-    yes("整行解析回 IANA 标识", zoneIDFromPickerInput(item) == "Asia/Shanghai", item)
-    yes("片段「shanghai」唯一命中 → Asia/Shanghai",
-        zoneIDFromPickerInput("shanghai") == "Asia/Shanghai",
-        String(describing: zoneIDFromPickerInput("shanghai")))
-    yes("空输入 → nil", zoneIDFromPickerInput("   ") == nil)
-    let ambiguous = TimeZone.knownTimeZoneIdentifiers.filter { $0.lowercased().contains("america") }
-    yes("歧义输入「america」→ nil（不猜，命中 \(ambiguous.count) 条）",
-        zoneIDFromPickerInput("america") == nil)
-
-    print("")
-    if fail == 0 {
-        print("全部通过：\(pass)/\(pass)")
-    } else {
-        print("失败 \(fail) 项，通过 \(pass) 项")
-    }
+    eq("Выбранная строка → IANA", zoneIDFromPickerInput(item) ?? "nil", "Asia/Shanghai")
+    eq("Часть названия → IANA", zoneIDFromPickerInput("shanghai") ?? "nil", "Asia/Shanghai")
+    eq("Moscow → IANA", zoneIDFromPickerInput("moscow") ?? "nil", "Europe/Moscow")
+    yes("Пустой запрос отклоняется", zoneIDFromPickerInput("   ") == nil)
+    yes("Неоднозначный запрос отклоняется", zoneIDFromPickerInput("america") == nil)
+    let menuText = lines.joined(separator: "\n")
+    let han = try! NSRegularExpression(pattern: #"\p{script=Han}"#)
+    yes("В меню нет китайского текста", han.numberOfMatches(in: menuText, range: NSRange(menuText.startIndex..<menuText.endIndex, in: menuText)) == 0, menuText)
+    print("Результат: \(pass) пройдено, \(fail) ошибок")
     return fail == 0 ? 0 : 1
 }
 
@@ -1404,12 +1354,12 @@ final class Store {
     /// GUI 与 CLI 入口都会调用，避免两个入口看到不同的配置。
     func migrateIfNeeded() {
         if configVersion < 2 {
-            log("配置迁移 → v2：改时区通道默认改为「免授权助手」（原值 \(privBackend.rawValue)）")
+            log("Миграция v2: способ по умолчанию — помощник (прежнее значение \(privBackend.rawValue))")
             privBackend = .helper
             configVersion = 2
         }
         if configVersion < 3 {
-            log("配置迁移 → v3：标题格式改为跟随系统时钟（日期+星期+时间，默认不带秒）")
+            log("Миграция v3: формат часов совпадает с системным (дата, день недели, время без секунд)")
             showSeconds = false
             configVersion = 3
         }
@@ -1417,11 +1367,11 @@ final class Store {
             // 恢复目标由「开启前的快照」改为「归位时区」。快照可能已被跟随功能自己写脏
             // （例如写成代理所在地），留着既没用又容易被误读成"原始时区"，直接清掉。
             if let old = originalZone {
-                log("配置迁移 → v4：恢复目标改为归位时区（\(homeZone)），清掉旧快照 \(old)")
+                log("Миграция v4: цель возврата — домашний пояс (\(homeZone)), удалён старый снимок \(old)")
                 originalZone = nil
                 originalAutoTZ = nil
             } else {
-                log("配置迁移 → v4：恢复目标改为归位时区（\(homeZone)）")
+                log("Миграция v4: цель возврата — домашний пояс (\(homeZone))")
             }
             configVersion = 4
         }
@@ -1472,12 +1422,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tick()
         // 用自绘图标替换 bundle 图标（构建时已写 AppIcon.icns，运行期再兜一层，保证 Dock/关于窗口一致）
         NSApp.applicationIconImage = Artwork.iconImage(size: 256)
-        log("AutoZ \(K.version) 启动；系统时区=\(systemZoneID()) 自动时区=\(String(describing: autoTimeZoneEnabled())) 通道=\(store.privBackend.rawValue)")
+        log("AutoZ \(K.version) запущен; системный пояс=\(systemZoneID()) автопояс=\(String(describing: autoTimeZoneEnabled())) способ=\(store.privBackend.rawValue)")
         // 助手探测放到主线程异步做，避免阻塞启动首帧
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             let ok = self.helperReady
-            log("助手状态：plist=\(HelperChannel.plistInstalled) bin=\(HelperChannel.binaryInstalled) socket=\(HelperChannel.socketExists) 就绪=\(ok)")
+            log("Состояние помощника: plist=\(HelperChannel.plistInstalled) bin=\(HelperChannel.binaryInstalled) socket=\(HelperChannel.socketExists) готов=\(ok)")
         }
         // 视觉自检开关：--show-menu 时自动把菜单弹出，便于截图核对版式（不必手点）
         if CommandLine.arguments.contains("--show-menu") {
@@ -1487,7 +1437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // Cocoa 原点在左下角，菜单栏项窗口底边就是菜单应该出现的位置
                 let wf = self.statusItem.button?.window?.frame
                 let at = NSPoint(x: wf?.minX ?? 2600, y: (wf?.minY ?? 1410) - 6)
-                log("自检：自动弹出菜单以便截图，位置=\(NSStringFromPoint(at))")
+                log("Проверка: открыто меню для снимка, позиция=\(NSStringFromPoint(at))")
                 m.popUp(positioning: nil, at: at, in: nil)
             }
         }
@@ -1495,7 +1445,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // 视觉自检开关：--show-console / --show-toast 分别自动打开高级配置窗口、弹一条通知，便于截图核对
         if CommandLine.arguments.contains("--show-console") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                log("自检：自动打开高级配置窗口以便截图")
+                log("Проверка: открыто окно настроек для снимка")
                 AdvancedWindowController.shared.show()
 
                 // --snapshot-console <png>：把窗口内容离屏渲染存盘。
@@ -1518,9 +1468,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if CommandLine.arguments.contains("--show-toast") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-                log("自检：自动弹出通知横幅以便截图")
-                notify(title: "AutoZ 同步完成",
-                       message: "出口 IP 192.0.2.1 · Los Angeles, California, US → America/Los_Angeles")
+                log("Проверка: показано уведомление для снимка")
+                notify(title: "AutoZ: синхронизация завершена",
+                       message: "Внешний IP 192.0.2.1 · Los Angeles, California, US → America/Los_Angeles")
             }
         }
 
@@ -1528,9 +1478,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if CommandLine.arguments.contains("--show-toast-offthread") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 DispatchQueue.global(qos: .userInitiated).async {
-                    log("自检：从后台队列发通知（验证主线程派发）")
-                    notify(title: "AutoZ 后台通知测试",
-                           message: "这条是从后台队列发出的；能正常显示说明跨线程通知没问题。")
+                    log("Проверка уведомления из фоновой очереди")
+                    notify(title: "AutoZ: фоновое уведомление",
+                           message: "Уведомление отправлено из фоновой очереди. Если оно видно, передача в главный поток работает.")
                 }
             }
         }
@@ -1539,7 +1489,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // 不打开点东西会显得"点了没反应"。由登录项/launchd 启动时不会被激活，不打扰。
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             if NSApp.isActive, !CommandLine.arguments.contains("--show-console") {
-                log("检测到用户主动启动 → 自动打开高级配置")
+                log("Ручной запуск → открыты настройки")
                 AdvancedWindowController.shared.show()
             }
         }
@@ -1547,38 +1497,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // 状态栏项自检：用程序内部数据确认它真的挂在菜单栏上（外部截图不可靠）
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             guard let self = self, let b = self.statusItem.button else {
-                log("状态栏项自检: button 不存在")
+                log("Проверка строки меню: кнопка отсутствует")
                 return
             }
-            log("状态栏项自检: isVisible=\(self.statusItem.isVisible) length=\(String(format: "%.1f", self.statusItem.length)) "
-                + "buttonFrame=\(NSStringFromRect(b.frame)) 屏幕坐标=\(b.window.map { NSStringFromRect($0.frame) } ?? "无窗口") "
-                + "标题=\"\(b.attributedTitle.string)\" 颜色=\(b.attributedTitle.length > 0 ? "\(b.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) ?? "无")" : "无")")
+            log("Проверка строки меню: isVisible=\(self.statusItem.isVisible) length=\(String(format: "%.1f", self.statusItem.length)) "
+                + "buttonFrame=\(NSStringFromRect(b.frame)) координаты экрана=\(b.window.map { NSStringFromRect($0.frame) } ?? "нет окна") "
+                + "заголовок=\"\(b.attributedTitle.string)\" цвет=\(b.attributedTitle.length > 0 ? "\(b.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) ?? "нет")" : "нет")")
         }
     }
 
     func applicationWillTerminate(_ n: Notification) {
-        log("AutoZ 退出")
+        log("AutoZ завершает работу")
         // 退出归位：把系统时区写回「归位时区」（默认东八区）。
         // 只在免授权助手就绪时做 —— 否则退出路径上会弹授权框，把退出卡住。
         guard store.syncEnabled, store.autoHome else {
-            log("退出归位：跳过（同步未开启，或已关闭自动归位）")
+            log("Возврат при выходе пропущен (синхронизация или автовозврат выключены)")
             return
         }
         let home = store.homeZone
         let cur = systemZoneID()
         guard cur != home else {
-            log("退出归位：系统时区已是 \(home)，无需修改")
+            log("Возврат при выходе: уже установлен \(home)")
             return
         }
         guard store.privBackend == .helper, HelperChannel.socketExists else {
-            log("退出归位：跳过（免授权助手不可用，不在此处弹授权框）；当前 \(cur)，归位目标 \(home)")
+            log("Возврат при выходе пропущен: помощник недоступен. Текущий пояс: \(cur), домашний: \(home)")
             return
         }
         switch applySystemZone(home, autoTZ: store.originalAutoTZ) {
-        case .changed(let z): log("退出归位：\(cur) → \(z)")
-        case .already(let z): log("退出归位：已是 \(z)")
-        case .cancelled:      log("退出归位：被取消")
-        case .failed(let e):  log("退出归位失败：\(e)")
+        case .changed(let z): log("Возврат при выходе: \(cur) → \(z)")
+        case .already(let z): log("Возврат при выходе: Уже установлен \(z)")
+        case .cancelled:      log("Возврат при выходе: отменено")
+        case .failed(let e):  log("Ошибка возврата при выходе: \(e)")
         }
     }
 
@@ -1611,21 +1561,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func tooltipText() -> String {
         let sys = systemZoneID()
         let sysTZ = systemTimeZone()
-        var lines = ["东八区（\(K.beijingID)）\(beijingTimeText(showSeconds: true))"]
-        lines.append("系统时区：\(sys.isEmpty ? "未知" : sys)   \(zoneBadge(sysTZ))")
-        lines.append("当地时间：\(zonedTimeText(sysTZ, showSeconds: true))   \(beijingDeltaText(sysTZ))")
+        var lines = ["UTC+8 (\(K.beijingID))\(beijingTimeText(showSeconds: true))"]
+        lines.append("Системный пояс: \(sys.isEmpty ? "неизвестно" : sys)   \(zoneBadge(sysTZ))")
+        lines.append("Местное время: \(zonedTimeText(sysTZ, showSeconds: true))   \(beijingDeltaText(sysTZ))")
         if isOffSystemZone() {
-            lines.append("⚠️ 显示的不是本机时区时间")
+            lines.append("⚠️ Часы показывают время другого часового пояса")
         }
         if let det = store.lastDetection {
-            lines.append("出口：\(det.ip) \(det.locationText)")
-            lines.append("解析时区：\(det.zoneID)")
+            lines.append("Внешний IP: \(det.ip) \(det.locationText)")
+            lines.append("Определённый пояс: \(det.zoneID)")
         }
         return lines.joined(separator: "\n")
     }
 
     @objc private func externalChange() {
-        log("系统时区/区域变化 → 系统时区=\(systemZoneID())")
+        log("Смена пояса/региона → системный пояс=\(systemZoneID())")
         DispatchQueue.main.async {
             self.lastTitle = ""
             self.tick()
@@ -1672,19 +1622,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         //    免得两处各写一份而慢慢漂移。
         //    每行都带上「哪个区 + 几点几分 + 哪天」—— 只给 America/Los_Angeles
         //    这种名字等于没给参考，用户还得自己换算。
-        rows.append(.info("东八区  \(beijingClockText(showSeconds: true))   \(zonedDateText(beijingZone(), at: now))", .strong))
+        rows.append(.info("UTC+8  \(beijingClockText(showSeconds: true))   \(zonedDateText(beijingZone(), at: now))", .strong))
         //    系统时区与出口时区**不可合并**：同步生效时两者相同，关掉同步就会分叉，都要留。
         let delta = beijingDeltaShort(sysTZ, at: now)
-        rows.append(.info("系统时区  \(zoneLineText(sysTZ, at: now))"
+        rows.append(.info("Системный пояс  \(zoneLineText(sysTZ, at: now))"
                           + "   \(zonedClockText(sysTZ, at: now))   \(zonedDateText(sysTZ, at: now))"
                           + (delta.isEmpty ? "" : "   \(delta)"), .info))
         if let det = store.lastDetection {
             // 出口时区与系统时区不同（关掉同步后很常见）时，把那边的时间也带上。
             let suffix = TimeZone(identifier: det.zoneID)
                 .map { exitZoneSuffix(exitZone: $0, systemZone: sysTZ, at: now) } ?? ""
-            rows.append(.info("出口  \(det.ip) · \(det.locationText)  →  \(det.zoneID)" + suffix, .info))
+            rows.append(.info("Внешний IP  \(det.ip) · \(det.locationText)  →  \(det.zoneID)" + suffix, .info))
         } else {
-            rows.append(.info("出口  尚未检测", .info))
+            rows.append(.info("Внешний IP  ещё не определён", .info))
         }
 
         rows.append(.sep)
@@ -1694,39 +1644,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let homeTZ = TimeZone(identifier: homeID)
         let homeLabel = homeTZ.map { zoneLineText($0, at: now) } ?? homeID
         if store.syncEnabled {
-            rows.append(.action(title: store.autoHome ? "关闭同步并回到归位时区" : "关闭同步（保持当前时区）",
+            rows.append(.action(title: store.autoHome ? "Отключить синхронизацию и вернуть домашний пояс" : "Отключить синхронизацию (сохранить пояс)",
                                 sel: #selector(toggleSync(_:)),
                                 enabled: !busy, checked: true, style: .primary,
                                 tip: store.autoHome
-                                    ? "关掉自动跟随，并把系统时区写回归位时区（\(homeLabel)）"
-                                    : "只关掉自动跟随，不动系统时区（自动归位已在高级配置里关掉）"))
+                                    ? "Отключить синхронизацию и вернуть домашний пояс (\(homeLabel))"
+                                    : "Отключить синхронизацию и сохранить системный пояс (автовозврат выключен)"))
         } else {
-            rows.append(.action(title: "开启同步（跟随出口 IP）", sel: #selector(toggleSync(_:)),
+            rows.append(.action(title: "Включить синхронизацию по IP", sel: #selector(toggleSync(_:)),
                                 enabled: !busy, checked: false, style: .primary,
-                                tip: "打开后按出口 IP 把系统时区设成对应时区；装了免授权助手则不弹授权框"))
+                                tip: "Определять часовой пояс системы по внешнему IP. С помощником запрос пароля не требуется"))
         }
-        rows.append(.action(title: "立即检查并同步（执行一次）", sel: #selector(checkAndSync(_:)),
+        rows.append(.action(title: "Проверить и синхронизировать один раз", sel: #selector(checkAndSync(_:)),
                             enabled: !busy, checked: false, style: .normal,
-                            tip: "不管开关状态，现在就查一次出口 IP 并应用（未装助手时会弹授权框）"))
-        rows.append(.action(title: "回到归位时区（\(homeLabel)）",
+                            tip: "Один раз проверить внешний IP и применить пояс (без помощника потребуется пароль)"))
+        rows.append(.action(title: "Вернуть домашний пояс (\(homeLabel))",
                             sel: #selector(restoreHome(_:)), enabled: !busy,
                             checked: false, style: .primary,
-                            tip: "把系统时区写回归位时区 \(homeID)，还原「自动设置时区」开关，并关闭同步"))
+                            tip: "Вернуть домашний пояс \(homeID), восстановить настройку автоматического пояса и отключить синхронизацию"))
 
         rows.append(.sep)
 
         // ── 3. 其余一切（关于、显示、通道、助手、诊断…）都在高级配置窗口里，菜单不再堆子菜单
-        rows.append(.action(title: "高级配置…", sel: #selector(showConsole(_:)),
+        rows.append(.action(title: "Настройки…", sel: #selector(showConsole(_:)),
                             enabled: true, checked: false, style: .normal,
-                            tip: "关于、菜单栏显示、改时区通道、助手安装卸载、诊断都在这里"))
+                            tip: "Часы в меню, авторизация, установка и удаление помощника, диагностика и сведения о программе"))
 
         rows.append(.sep)
-        rows.append(.action(title: "退出 AutoZ", sel: #selector(quitApp(_:)),
+        rows.append(.action(title: "Завершить AutoZ", sel: #selector(quitApp(_:)),
                             enabled: true, checked: false, style: .normal, tip: nil))
 
         if busy {
             rows.append(.sep)
-            rows.append(.info("⏳ 正在检测 / 等待系统授权…", .info))
+            rows.append(.info("⏳ Проверка / ожидание авторизации…", .info))
         }
         return rows
     }
@@ -1798,11 +1748,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case .sep:
                     out.append(pad + "──────────────────────────")
                 case .info(let t, let s):
-                    out.append(pad + (s == .strong ? "【\(t)】" : "   \(t)"))
+                    out.append(pad + (s == .strong ? "[\(t)]" : "   \(t)"))
                 case .action(let t, _, let en, let ck, let st, let tip):
-                    let mark = ck ? "[✓] " : (en ? "" : "[禁用] ")
+                    let mark = ck ? "[✓] " : (en ? "" : "[недоступно] ")
                     let body = st == .primary ? "** \(t) **" : t
-                    out.append(pad + mark + body + (tip != nil ? "   ⟨有提示⟩" : ""))
+                    out.append(pad + mark + body + (tip != nil ? "   ⟨подсказка⟩" : ""))
                 case .submenu(let t, let sub):
                     out.append(pad + "\(t) ▸")
                     walk(sub, depth + 1)
@@ -1831,16 +1781,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             m.pathUpdateHandler = { [weak self] path in
                 guard path.status == .satisfied else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
-                    self?.followCheck(reason: "网络变化")
+                    self?.followCheck(reason: "изменение сети")
                 }
             }
             m.start(queue: DispatchQueue(label: "autoz.path"))
             pathMonitor = m
         }
         followTimer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
-            self?.followCheck(reason: "定时")
+            self?.followCheck(reason: "таймер")
         }
-        log("自动跟随已启动（网络变化 + 每 10 分钟兜底）")
+        log("Автосинхронизация включена (при смене сети и каждые 10 минут)")
     }
 
     private func stopFollowing() {
@@ -1848,7 +1798,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         followTimer = nil
         pathMonitor?.cancel()
         pathMonitor = nil
-        log("自动跟随已停止")
+        log("Автосинхронизация остановлена")
     }
 
     /// 检测出口 IP 对应时区；与当前系统时区不同才动手
@@ -1861,31 +1811,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.async {
                 self.followInFlight = false
                 guard let det = det else {
-                    log("自动跟随（\(reason)）检测失败")
+                    log("Автосинхронизация (\(reason))Проверка не удалась")
                     return
                 }
                 self.store.lastDetection = det
                 let cur = systemZoneID()
                 guard det.zoneID != cur else {
-                    log("自动跟随（\(reason)）：仍是 \(cur)，无需改动")
+                    log("Автосинхронизация (\(reason)): по-прежнему \(cur), изменений не требуется")
                     return
                 }
                 if HelperChannel.socketExists {
-                    log("自动跟随（\(reason)）：\(cur) → \(det.zoneID)")
+                    log("Автосинхронизация (\(reason)): \(cur) → \(det.zoneID)")
                     let out = applySystemZone(det.zoneID, autoTZ: false)
                     switch out {
                     case .changed(let z):
-                        self.store.lastAction = "自动跟随 → \(z)"
-                        notify(title: "AutoZ 已自动跟随出口 IP", message: "\(det.locationText) → 系统时区已设为 \(z)")
+                        self.store.lastAction = "Автосинхронизация → \(z)"
+                        notify(title: "AutoZ: пояс обновлён по IP", message: "\(det.locationText) → Системный пояс установлен: \(z)")
                     case .failed(let e):
-                        notify(title: "AutoZ 自动跟随失败", message: e)
+                        notify(title: "AutoZ: ошибка автосинхронизации", message: e)
                     default:
                         break
                     }
                 } else {
-                    self.store.lastAction = "出口变化：\(det.zoneID)（未跟随）"
-                    notify(title: "AutoZ 检测到出口时区变化",
-                           message: "\(det.locationText) → \(det.zoneID)。点菜单「立即检查并同步」应用（装免授权助手后可自动跟随）")
+                    self.store.lastAction = "Пояс по IP изменился: \(det.zoneID)(без применения)"
+                    notify(title: "AutoZ: часовой пояс по IP изменился",
+                           message: "\(det.locationText) → \(det.zoneID). Нажмите «Проверить и синхронизировать». Для автоматической смены установите помощник")
                 }
                 self.refresh()
             }
@@ -1903,33 +1853,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // 关掉跟随 = 不再按出口 IP 走，顺手把系统时区写回归位时区（默认东八区）。
             // 只有「已经不在归位时区」且用户没关掉自动归位时才动手，否则纯关开关。
             if store.autoHome, cur != home {
-                store.lastAction = "关闭同步并归位 → \(home)"
-                log("关闭同步开关：自动归位 \(cur) → \(home)")
-                notify(title: "AutoZ 已关闭同步",
-                       message: "不再跟随出口 IP，正在把系统时区写回 \(home)…")
+                store.lastAction = "Синхронизация выключена, возврат → \(home)"
+                log("Синхронизация выключена: возврат \(cur) → \(home)")
+                notify(title: "AutoZ: синхронизация выключена",
+                       message: "Синхронизация по IP выключена. Возвращается пояс \(home)…")
                 after { [weak self] in
                     guard let self = self else { return }
                     switch applySystemZone(home, autoTZ: self.store.originalAutoTZ) {
                     case .changed(let z):
-                        self.store.lastAction = "关闭同步 → 已归位 \(z)"
-                        log("关闭同步归位成功 → \(z)")
-                        notify(title: "AutoZ 已归位", message: "系统时区 = \(z)")
+                        self.store.lastAction = "Синхронизация выключена → возвращён пояс \(z)"
+                        log("После отключения возвращён пояс → \(z)")
+                        notify(title: "AutoZ: домашний пояс восстановлен", message: "Системный пояс = \(z)")
                     case .already(let z):
-                        log("关闭同步归位：已是 \(z)")
+                        log("После отключения: уже установлен \(z)")
                     case .cancelled:
-                        notify(title: "AutoZ", message: "已取消，系统时区仍是 \(cur)")
+                        notify(title: "AutoZ", message: "Отменено; системный пояс остался \(cur)")
                     case .failed(let e):
-                        notify(title: "AutoZ 归位失败", message: e, sound: "Basso")
+                        notify(title: "AutoZ: не удалось вернуть домашний пояс", message: e, sound: "Basso")
                     }
                 }
                 return
             }
-            store.lastAction = "已关闭同步（时区保持 \(cur)）"
-            log("关闭同步开关（不修改系统时区）：autoHome=\(store.autoHome) 当前=\(cur) 归位目标=\(home)")
+            store.lastAction = "Синхронизация выключена (сохранён пояс \(cur))"
+            log("Синхронизация выключена (системный пояс сохранён): autoHome=\(store.autoHome) текущий=\(cur) домашний=\(home)")
             let tip = store.autoHome
-                ? "，当前已是归位时区 \(home)"
-                : "，当前仍为 \(cur)（自动归位已关闭）"
-            notify(title: "AutoZ 已关闭同步", message: "不再跟随出口 IP\(tip)。")
+                ? ", уже установлен домашний пояс \(home)"
+                : ", сохранён \(cur) (автовозврат выключен)"
+            notify(title: "AutoZ: синхронизация выключена", message: "Синхронизация по IP выключена\(tip).")
             refresh()
         } else {
             store.syncEnabled = true
@@ -1937,11 +1887,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let cur = systemZoneID()
                 store.originalZone = cur
                 store.originalAutoTZ = autoTimeZoneEnabled()
-                log("记录原始状态：时区=\(cur) 自动时区=\(String(describing: autoTimeZoneEnabled()))")
+                log("Сохранено исходное состояние: пояс=\(cur) автопояс=\(String(describing: autoTimeZoneEnabled()))")
             }
-            store.lastAction = "已打开同步"
+            store.lastAction = "Синхронизация включена"
             startFollowing()
-            notify(title: "AutoZ 已开启同步", message: "正在按出口 IP 检测并设置系统时区…")
+            notify(title: "AutoZ: синхронизация включена", message: "Определение и установка часового пояса по внешнему IP…")
             perform(apply: true)
         }
         rebuildMenu()
@@ -1952,12 +1902,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             store.originalZone = systemZoneID()
             store.originalAutoTZ = autoTimeZoneEnabled()
         }
-        store.lastAction = "立即检查并同步"
+        store.lastAction = "Проверить и синхронизировать"
         perform(apply: true)
     }
 
     @objc private func checkOnly(_ sender: NSMenuItem) {
-        store.lastAction = "仅查询"
+        store.lastAction = "Только проверить"
         perform(apply: false)
     }
 
@@ -1966,28 +1916,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func restoreHome(_ sender: NSMenuItem) {
         let home = store.homeZone
         guard let tz = TimeZone(identifier: home) else {
-            notify(title: "AutoZ 归位失败", message: "归位时区不是合法的 IANA 标识：\(home)", sound: "Basso")
+            notify(title: "AutoZ: не удалось вернуть домашний пояс", message: "Некорректный идентификатор IANA домашнего пояса: \(home)", sound: "Basso")
             return
         }
-        let name = zoneCNName(tz)
-        store.lastAction = "手动归位 \(home)"
-        log("手动归位 → \(home)（\(name)）")
+        let name = localizedZoneName(tz)
+        store.lastAction = "Ручной возврат \(home)"
+        log("Ручной возврат → \(home) (\(name))")
         after { [weak self] in
             guard let self = self else { return }
             switch applySystemZone(home, autoTZ: self.store.originalAutoTZ) {
             case .changed(let z):
-                self.store.lastAction = "已归位 \(z)"
-                notify(title: "AutoZ 已归位", message: "系统时区 = \(z)（\(name)）")
+                self.store.lastAction = "Возвращён пояс \(z)"
+                notify(title: "AutoZ: домашний пояс восстановлен", message: "Системный пояс = \(z) (\(name))")
                 self.store.syncEnabled = false
                 self.stopFollowing()
             case .already(let z):
-                notify(title: "AutoZ", message: "系统时区已经是 \(z) 了，无需修改。")
+                notify(title: "AutoZ", message: "Системный пояс уже установлен: \(z). Изменений не требуется.")
                 self.store.syncEnabled = false
                 self.stopFollowing()
             case .cancelled:
-                notify(title: "AutoZ", message: "已取消，未修改系统时区")
+                notify(title: "AutoZ", message: "Отменено; системный пояс не изменён")
             case .failed(let e):
-                notify(title: "AutoZ 归位失败", message: e, sound: "Basso")
+                notify(title: "AutoZ: не удалось вернуть домашний пояс", message: e, sound: "Basso")
             }
         }
     }
@@ -1995,19 +1945,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// 改「归位时区」。传进来的必须是合法 IANA 标识，否则拒绝并告知。
     @objc private func setHomeZone(_ id: String) {
         guard TimeZone(identifier: id) != nil else {
-            notify(title: "AutoZ", message: "「\(id)」不是合法的时区标识", sound: "Basso")
+            notify(title: "AutoZ", message: "«\(id)» — некорректный идентификатор часового пояса", sound: "Basso")
             return
         }
         store.homeZone = id
-        store.lastAction = "归位时区 → \(id)"
-        log("归位时区改为 \(id)")
+        store.lastAction = "Домашний пояс → \(id)"
+        log("Домашний пояс изменён: \(id)")
         refresh()
     }
 
     @objc private func setAutoHome(_ on: Bool) {
         store.autoHome = on
-        store.lastAction = on ? "已开启自动归位" : "已关闭自动归位"
-        log("自动归位 → \(on ? "开" : "关")")
+        store.lastAction = on ? "Автовозврат включён" : "Автовозврат выключен"
+        log("Автовозврат → \(on ? "вкл." : "выкл.")")
         refresh()
     }
 
@@ -2019,48 +1969,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func useHelperBackend(_ sender: NSMenuItem) {
         store.privBackend = .helper
-        log("改时区通道 → \(store.privBackend.rawValue)")
+        log("Способ смены пояса → \(store.privBackend.rawValue)")
         refresh()
     }
 
     @objc private func useNativeBackend(_ sender: NSMenuItem) {
         store.privBackend = .native
-        log("改时区通道 → \(store.privBackend.rawValue)（每次都弹授权框）")
+        log("Способ смены пояса → \(store.privBackend.rawValue)(пароль запрашивается каждый раз)")
         refresh()
     }
 
     @objc private func useAppleScriptBackend(_ sender: NSMenuItem) {
         store.privBackend = .appleScript
-        log("改时区通道 → \(store.privBackend.rawValue)（每次都弹授权框）")
+        log("Способ смены пояса → \(store.privBackend.rawValue)(пароль запрашивается каждый раз)")
         refresh()
     }
 
     /// 安装免授权助手：这是唯一还需要输一次密码的地方，之后改时区零弹窗
     @objc private func installHelper(_ sender: NSMenuItem) {
-        log("开始安装免授权助手")
+        log("Начало установки помощника")
         after { [weak self] in
             guard let self = self else { return }
             let r = HelperInstaller.install()
             self.helperReadyCache = nil
-            self.store.lastAction = r.ok ? "免授权助手已安装" : "免授权助手安装未完成"
-            notify(title: r.ok ? "AutoZ 免授权模式已启用" : "AutoZ 安装未完成", message: r.text)
+            self.store.lastAction = r.ok ? "Помощник установлен" : "Установка помощника не завершена"
+            notify(title: r.ok ? "AutoZ: помощник готов" : "AutoZ: установка не завершена", message: r.text)
             self.refresh()
         }
     }
 
     @objc private func uninstallHelper(_ sender: NSMenuItem) {
         let a = NSAlert()
-        a.messageText = "卸载免授权助手？"
+        a.messageText = "Удалить помощника?"
         a.informativeText = """
-        会移除这三个文件：
+        Будут удалены три файла:
         ・\(HelperK.plistPath)
         ・\(HelperK.binPath)
         ・\(HelperK.socketPath)
 
-        卸载后改时区会恢复成「每次弹一次授权框」。需要一次管理员授权。
+        После удаления для каждой смены часового пояса потребуется пароль. Для удаления нужна авторизация администратора.
         """
-        a.addButton(withTitle: "取消")
-        a.addButton(withTitle: "卸载")
+        a.addButton(withTitle: "Отмена")
+        a.addButton(withTitle: "Удалить")
         NSApp.activate(ignoringOtherApps: true)
         guard a.runModal() == .alertSecondButtonReturn else { return }
 
@@ -2068,8 +2018,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self = self else { return }
             let r = HelperInstaller.uninstall()
             self.helperReadyCache = nil
-            self.store.lastAction = r.ok ? "免授权助手已卸载" : "免授权助手卸载未完成"
-            notify(title: r.ok ? "AutoZ 已退出免授权模式" : "AutoZ 卸载未完成", message: r.text)
+            self.store.lastAction = r.ok ? "Помощник удалён" : "Удаление помощника не завершено"
+            notify(title: r.ok ? "AutoZ: помощник удалён" : "AutoZ: удаление не завершено", message: r.text)
             self.refresh()
         }
     }
@@ -2077,8 +2027,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openDateSettings(_ sender: NSMenuItem) {
         // 原生 API：NSWorkspace 打开系统设置深链（macOS 13+ 用 Settings 扩展 URL，旧系统回退到 preference pane）
         if !openDateAndTimeSettings() {
-            log("打开「日期与时间」设置失败")
-            notify(title: "AutoZ", message: "无法打开系统「日期与时间」设置面板", sound: nil)
+            log("Не удалось открыть настройки даты и времени")
+            notify(title: "AutoZ", message: "Не удалось открыть системные настройки даты и времени", sound: nil)
         }
     }
 
@@ -2086,41 +2036,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let text = diagnosticsText()
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        notify(title: "AutoZ", message: "诊断信息已复制到剪贴板", sound: nil)
+        notify(title: "AutoZ", message: "Диагностика скопирована в буфер обмена", sound: nil)
     }
 
     @objc private func testNotification(_ sender: NSMenuItem) {
-        notify(title: "AutoZ 通知测试",
-               message: "这就是同步完成时右上角横幅的样子（程序内自绘，不经过系统通知）")
+        notify(title: "AutoZ: проверка уведомлений",
+               message: "Так выглядит уведомление о синхронизации. Его показывает само приложение")
     }
 
     private func diagnosticsText() -> String {
         var out: [String] = []
-        out.append("AutoZ \(K.version) 诊断信息  \(stamp(Date()))")
-        out.append("系统版本: \(ProcessInfo.processInfo.operatingSystemVersionString)")
-        out.append("显示时间(东八区): \(beijingTimeText(showSeconds: store.showSeconds))")
-        out.append("标题模板: \(titlePattern(showSeconds: store.showSeconds))  （跟随系统菜单栏时钟）")
-        out.append("时间模板: \(clockPattern(showSeconds: store.showSeconds))  显示秒=\(store.showSeconds)")
-        out.append("系统时区: \(systemZoneID())")
-        out.append("自动设置时区: \(String(describing: autoTimeZoneEnabled()))")
-        out.append("同步开关: \(store.syncEnabled ? "开" : "关")  归位时区: \(store.homeZone)"
-                   + "  自动归位: \(store.autoHome ? "开" : "关")")
+        out.append("AutoZ \(K.version) Диагностика  \(stamp(Date()))")
+        out.append("Версия macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        out.append("Часы в меню (UTC+8): \(beijingTimeText(showSeconds: store.showSeconds))")
+        out.append("Шаблон часов: \(titlePattern(showSeconds: store.showSeconds))  (формат системных часов)")
+        out.append("Шаблон времени: \(clockPattern(showSeconds: store.showSeconds))  секунды=\(store.showSeconds)")
+        out.append("Системный пояс: \(systemZoneID())")
+        out.append("Автовыбор пояса: \(String(describing: autoTimeZoneEnabled()))")
+        out.append("Синхронизация: \(store.syncEnabled ? "вкл." : "выкл.")  Домашний пояс: \(store.homeZone)"
+                   + "  Автовозврат: \(store.autoHome ? "вкл." : "выкл.")")
         // 旧快照只作诊断留存，**不再是恢复目标**（可能被跟随功能自己写脏）
-        out.append("开启前快照（仅诊断）: \(store.originalZone ?? "无")")
-        out.append("最近动作: \(store.lastAction)")
-        out.append("改时区通道: \(store.privBackend.rawValue)（上次实际用: \(store.lastBackend)）")
-        out.append("免授权助手: \(HelperChannel.statusText)")
-        out.append("开机自启: \(LoginItem.statusText)")
+        out.append("Исходный снимок (для диагностики): \(store.originalZone ?? "нет")")
+        out.append("Последнее действие: \(store.lastAction)")
+        out.append("Способ смены пояса: \(store.privBackend.rawValue) (последний использованный: \(store.lastBackend))")
+        out.append("Помощник: \(HelperChannel.statusText)")
+        out.append("Автозапуск: \(LoginItem.statusText)")
         out.append("  \(LoginItem.plistURL.path)")
-        out.append("  plist 存在=\(HelperChannel.plistInstalled)  二进制存在=\(HelperChannel.binaryInstalled)  socket 存在=\(HelperChannel.socketExists)")
-        out.append("通知通道: 程序内自绘横幅（零系统权限，样式见 ui.swift）")
+        out.append("  plist есть=\(HelperChannel.plistInstalled)  исполняемый файл есть=\(HelperChannel.binaryInstalled)  socket есть=\(HelperChannel.socketExists)")
+        out.append("Уведомления: баннеры приложения (без системных разрешений, см. ui.swift)")
         if let d = store.lastDetection {
-            out.append("检测来源: \(d.source)  \(stamp(d.fetchedAt))")
-            out.append("出口 IP: \(d.ip)  \(d.locationText)  \(d.org)")
-            out.append("解析时区: \(d.zoneID)  ← \(d.zoneSource)")
-            out.append("原始响应:\n\(d.rawJSON)")
+            out.append("Источник проверки: \(d.source)  \(stamp(d.fetchedAt))")
+            out.append("Внешний IP: \(d.ip)  \(d.locationText)  \(d.org)")
+            out.append("Определённый пояс: \(d.zoneID)  ← \(d.zoneSource)")
+            out.append("Исходный ответ:\n\(d.rawJSON)")
         } else {
-            out.append("检测来源: 无")
+            out.append("Источник проверки: нет")
         }
         return out.joined(separator: "\n")
     }
@@ -2156,7 +2106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             do {
                 let det = try Checker.run()
                 detection = det
-                log("检测成功: \(det.ip) \(det.locationText) → \(det.zoneID) (\(det.zoneSource))")
+                log("Проверка выполнена: \(det.ip) \(det.locationText) → \(det.zoneID) (\(det.zoneSource))")
                 if apply {
                     // 同步时一并关闭「自动设置时区」，否则系统会用定位把时区改回去
                     outcome = applySystemZone(det.zoneID, autoTZ: false)
@@ -2166,7 +2116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch {
                 errorText = error.localizedDescription
                 outcome = nil
-                log("检测失败: \(errorText ?? "?")")
+                log("Проверка не удалась: \(errorText ?? "?")")
             }
 
             DispatchQueue.main.async {
@@ -2174,17 +2124,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if let det = detection { self.store.lastDetection = det }
 
                 if let err = errorText {
-                    self.store.lastAction = "检测失败"
-                    notify(title: "AutoZ 检测失败", message: err)
+                    self.store.lastAction = "Проверка не удалась"
+                    notify(title: "AutoZ Проверка не удалась", message: err)
                     self.refresh()
                     return
                 }
                 guard let det = detection else { self.refresh(); return }
 
                 if !apply {
-                    self.store.lastAction = "仅查询：\(det.zoneID)"
-                    notify(title: "AutoZ 检测结果",
-                           message: "\(det.ip) · \(det.locationText) → \(det.zoneID)（未修改系统时区）")
+                    self.store.lastAction = "Только проверить: \(det.zoneID)"
+                    notify(title: "AutoZ: результат проверки",
+                           message: "\(det.ip) · \(det.locationText) → \(det.zoneID)(системный пояс не изменён)")
                     self.refresh()
                     return
                 }
@@ -2192,23 +2142,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 switch outcome! {
                 case .changed(let z):
                     self.store.lastSyncAt = Date()
-                    self.store.lastAction = "已设为 \(z)"
-                    notify(title: "AutoZ 时区已更新",
-                           message: "\(det.ip) · \(det.locationText) → \(z)；已关闭「自动设置时区」，避免被定位改回。")
+                    self.store.lastAction = "Установлен пояс \(z)"
+                    notify(title: "AutoZ: часовой пояс обновлён",
+                           message: "\(det.ip) · \(det.locationText) → \(z). Автоматический выбор пояса macOS отключён, чтобы система не вернула прежнее значение.")
                     self.rebuildMenu()
                     self.refresh()
                 case .already(let z):
                     self.store.lastSyncAt = Date()
-                    self.store.lastAction = "已是 \(z)"
-                    notify(title: "AutoZ", message: "系统时区已经是 \(z)，无需修改。")
+                    self.store.lastAction = "Уже установлен \(z)"
+                    notify(title: "AutoZ", message: "Системный пояс уже установлен: \(z). Изменений не требуется.")
                     self.refresh()
                 case .cancelled:
-                    self.store.lastAction = "授权被取消"
-                    notify(title: "AutoZ", message: "已取消授权，系统时区未修改（目标：\(det.zoneID)）")
+                    self.store.lastAction = "Авторизация отменена"
+                    notify(title: "AutoZ", message: "Авторизация отменена; системный пояс не изменён (цель: \(det.zoneID))")
                     self.refresh()
                 case .failed(let e):
-                    self.store.lastAction = "设置失败"
-                    notify(title: "AutoZ 设置失败", message: e)
+                    self.store.lastAction = "Ошибка установки пояса"
+                    notify(title: "AutoZ: ошибка установки пояса", message: e)
                     self.refresh()
                 }
             }
@@ -2253,89 +2203,89 @@ func runCLI(_ args: [String]) -> Int32 {
     case "--apply":
         do {
             let d = try Checker.run()
-            pr("检测: \(d.ip) \(d.locationText) → \(d.zoneID) (\(d.zoneSource))")
+            pr("Проверка: \(d.ip) \(d.locationText) → \(d.zoneID) (\(d.zoneSource))")
             switch applySystemZone(d.zoneID) {
-            case .changed(let z): pr("OK: 系统时区已设为 \(z)"); return 0
-            case .already(let z): pr("OK: 系统时区已经是 \(z)"); return 0
-            case .cancelled:      pr("CANCELLED: 未获授权"); return 3
+            case .changed(let z): pr("OK: Системный пояс установлен: \(z)"); return 0
+            case .already(let z): pr("OK: Системный пояс уже установлен: \(z)"); return 0
+            case .cancelled:      pr("CANCELLED: нет разрешения"); return 3
             case .failed(let e):  pr("FAILED: \(e)"); return 4
             }
         } catch { pr("ERROR: \(error.localizedDescription)"); return 2 }
 
     case "--set":
-        guard args.count > 1, isValidZoneID(args[1]) else { pr("用法: AutoZ --set <IANA 时区，如 Asia/Tokyo>"); return 1 }
+        guard args.count > 1, isValidZoneID(args[1]) else { pr("Использование: AutoZ --set <пояс IANA, например Europe/Moscow>"); return 1 }
         switch applySystemZone(args[1]) {
-        case .changed(let z): pr("OK: 系统时区已设为 \(z)"); return 0
-        case .already(let z): pr("OK: 系统时区已经是 \(z)"); return 0
+        case .changed(let z): pr("OK: Системный пояс установлен: \(z)"); return 0
+        case .already(let z): pr("OK: Системный пояс уже установлен: \(z)"); return 0
         case .cancelled:      pr("CANCELLED"); return 3
         case .failed(let e):  pr("FAILED: \(e)"); return 4
         }
 
     case "--system":
-        pr("系统时区:   \(systemZoneID())")
-        pr("自动设时区: \(String(describing: autoTimeZoneEnabled()))")
-        pr("进程缓存:   \(TimeZone.current.identifier)")
+        pr("Системный пояс:   \(systemZoneID())")
+        pr("Автовыбор пояса: \(String(describing: autoTimeZoneEnabled()))")
+        pr("Кеш процесса:   \(TimeZone.current.identifier)")
         return 0
 
     case "--format":
         pr("locale:        \(Locale.current.identifier)")
-        pr("显示秒:        \(Store.shared.showSeconds)")
-        pr("标题模板:      \(titlePattern(showSeconds: Store.shared.showSeconds))   ← 跟随系统菜单栏时钟")
-        pr("时间模板:      \(clockPattern(showSeconds: Store.shared.showSeconds))")
-        pr("标题文本:      \(beijingTimeText(showSeconds: Store.shared.showSeconds))")
-        pr("仅时间(秒):    \(beijingClockText(showSeconds: true))")
-        pr("东八区日期:    \(beijingDateText())")
-        pr("与系统不一致:  \(isOffSystemZone() ? "是（标题显示为橙色）" : "否（标题为默认色）")")
+        pr("Секунды:        \(Store.shared.showSeconds)")
+        pr("Шаблон часов:      \(titlePattern(showSeconds: Store.shared.showSeconds))   ← формат системных часов")
+        pr("Шаблон времени:      \(clockPattern(showSeconds: Store.shared.showSeconds))")
+        pr("Текст часов:      \(beijingTimeText(showSeconds: Store.shared.showSeconds))")
+        pr("Время с секундами:    \(beijingClockText(showSeconds: true))")
+        pr("Дата UTC+8:    \(beijingDateText())")
+        pr("Отличается от системы:  \(isOffSystemZone() ? "да (оранжевые часы)" : "нет (обычный цвет)")")
         return 0
 
     case "--icon-preview":
         guard args.count > 2, let size = Double(args[2]) else {
-            pr("用法: AutoZ --icon-preview <输出.png> <尺寸>"); return 1
+            pr("Использование: AutoZ --icon-preview <файл.png> <размер>"); return 1
         }
-        guard let data = Artwork.pngData(size: CGFloat(size)) else { pr("绘制失败"); return 1 }
+        guard let data = Artwork.pngData(size: CGFloat(size)) else { pr("Ошибка отрисовки"); return 1 }
         do {
             try data.write(to: URL(fileURLWithPath: args[1]))
-            pr("已导出 \(args[1])（\(Int(size))px）")
+            pr("Экспортирован \(args[1]) (\(Int(size))px)")
             return 0
-        } catch { pr("写入失败: \(error)"); return 1 }
+        } catch { pr("Ошибка записи: \(error)"); return 1 }
 
     case "--notify-test":
-        pr("通知横幅是程序内自绘的，只有 GUI 在跑才看得见。")
-        pr("  · GUI 已运行：菜单「更多 ▸ 测试通知」")
-        pr("  · 从头验证：/usr/bin/open /Applications/AutoZ.app --args --notify-test")
-        notify(title: "AutoZ 通知测试", message: "CLI 触发的通知（GUI 在跑时才会显示横幅）")
-        pr("已记一条日志到 \(K.logPath)。")
+        pr("Баннеры уведомлений видны только в работающем приложении.")
+        pr("  · Если приложение запущено: «Настройки → Диагностика → Проверить уведомления»")
+        pr("  · Запустить проверку: /usr/bin/open /Applications/AutoZ.app --args --notify-test")
+        notify(title: "AutoZ: проверка уведомлений", message: "Уведомление из командной строки (баннер виден только в приложении)")
+        pr("Запись добавлена в \(K.logPath).")
         return 0
 
     case "--print-osa", "--plan":
         let zone = args.count > 1 ? args[1] : (try? Checker.run().zoneID) ?? K.beijingID
-        guard isValidZoneID(zone) else { pr("非法时区: \(zone)"); return 1 }
-        pr("目标时区:      \(zone)")
-        pr("当前系统时区:  \(systemZoneID())")
-        pr("自动时区开关:  \(String(describing: autoTimeZoneEnabled()))")
-        pr("软链应指向:    \(K.zoneRoot)\(zone)")
+        guard isValidZoneID(zone) else { pr("Некорректный пояс: \(zone)"); return 1 }
+        pr("Целевой пояс:      \(zone)")
+        pr("Текущий системный пояс:  \(systemZoneID())")
+        pr("Автовыбор пояса:  \(String(describing: autoTimeZoneEnabled()))")
+        pr("Цель символической ссылки:    \(K.zoneRoot)\(zone)")
         pr("")
-        pr("=== 通道 0：免授权助手（装了就零弹窗）===")
-        pr("socket: \(HelperK.socketPath)  存在=\(HelperChannel.socketExists)")
-        pr("plist:  \(HelperK.plistPath)  存在=\(HelperChannel.plistInstalled)")
-        pr("二进制: \(HelperK.binPath)  存在=\(HelperChannel.binaryInstalled)")
+        pr("=== Способ 0: помощник (без запроса пароля)===")
+        pr("socket: \(HelperK.socketPath)  есть=\(HelperChannel.socketExists)")
+        pr("plist:  \(HelperK.plistPath)  есть=\(HelperChannel.plistInstalled)")
+        pr("Исполняемый файл: \(HelperK.binPath)  есть=\(HelperChannel.binaryInstalled)")
         if let r = HelperChannel.ping() {
-            pr("ping:   ✓ \(r.msg)  助手视角时区=\(r.raw["zone"] as? String ?? "?")")
-            pr("将发送: {\"cmd\":\"set_zone\",\"zone\":\"\(zone)\",\"auto\":false}")
+            pr("ping:   ✓ \(r.msg)  пояс по данным помощника=\(r.raw["zone"] as? String ?? "?")")
+            pr("Будет отправлено: {\"cmd\":\"set_zone\",\"zone\":\"\(zone)\",\"auto\":false}")
         } else {
-            pr("ping:   ✗ 无响应 → 会回退到下面的通道 1/2（每次都会弹授权框）")
+            pr("ping:   ✗ нет ответа → способ 1/2 с запросом пароля")
         }
         pr("")
-        pr("=== 通道 1：原生 Security.framework（argv 直传，不经过 shell）===")
+        pr("=== Способ 1: Security.framework (аргументы argv, без оболочки)===")
         pr("AuthorizationCreate(nil, nil, [.interactionAllowed, .extendRights, .preAuthorize])")
         for c in zoneSteps(zoneID: zone, autoTZ: false) {
             pr("  \(c.display)\(c.note.map { "   ← \($0)" } ?? "")")
         }
         pr("")
-        pr("=== 通道 2：AppleScript 回退 ===")
+        pr("=== Способ 2: AppleScript (резервный) ===")
         pr(buildOsaCommand(zoneID: zone, autoTZ: false))
         pr("")
-        pr("（以上仅为打印，未执行任何提权操作）")
+        pr("(Показан только план; команды с правами администратора не выполнялись)")
         return 0
 
     case "--menu":
@@ -2346,100 +2296,100 @@ func runCLI(_ args: [String]) -> Int32 {
         return Int32(runTZSelfTest())
 
     case "--helper-status":
-        pr("免授权助手状态")
-        pr("  标签:     \(HelperK.label)")
-        pr("  socket:   \(HelperK.socketPath)  存在=\(HelperChannel.socketExists)")
-        pr("  plist:    \(HelperK.plistPath)  存在=\(HelperChannel.plistInstalled)")
-        pr("  二进制:   \(HelperK.binPath)  存在=\(HelperChannel.binaryInstalled)")
-        pr("  待装来源: \(HelperChannel.binarySource ?? "（找不到，需要重新 build）")")
+        pr("Состояние помощника")
+        pr("  Метка:     \(HelperK.label)")
+        pr("  socket:   \(HelperK.socketPath)  есть=\(HelperChannel.socketExists)")
+        pr("  plist:    \(HelperK.plistPath)  есть=\(HelperChannel.plistInstalled)")
+        pr("  Исполняемый файл:   \(HelperK.binPath)  есть=\(HelperChannel.binaryInstalled)")
+        pr("  Источник установки: \(HelperChannel.binarySource ?? "(не найден; повторите сборку)")")
         pr("  allow uid: \(getuid())")
-        pr("  日志:     \(HelperK.logPath)")
+        pr("  Журнал:     \(HelperK.logPath)")
         if let r = HelperChannel.ping() {
-            pr("  ping:     ✓ \(r.msg)  版本=\(r.raw["version"] as? String ?? "?")  助手 pid=\(r.raw["pid"] as? Int ?? -1)")
-            pr("            助手视角时区=\(r.raw["zone"] as? String ?? "?")  自动时区=\(r.raw["auto"].map { "\($0)" } ?? "-")")
-            pr("  结论:     已启用 —— 改时区不再弹授权框")
+            pr("  ping:     ✓ \(r.msg)  версия=\(r.raw["version"] as? String ?? "?")  PID помощника=\(r.raw["pid"] as? Int ?? -1)")
+            pr("            пояс по данным помощника=\(r.raw["zone"] as? String ?? "?")  автопояс=\(r.raw["auto"].map { "\($0)" } ?? "-")")
+            pr("  Итог: помощник включён; смена пояса без запроса пароля")
         } else {
-            pr("  ping:     ✗ 无响应")
-            pr("  结论:     未启用 —— 改时区会每次弹授权框（可点菜单里的「免授权模式 未安装 · 点此安装」）")
+            pr("  ping:     ✗ нет ответа")
+            pr("  Итог: помощник выключен; для смены пояса нужен пароль. Установка: «Настройки → Авторизация»")
         }
         return 0
 
     case "--helper-plan":
-        pr("=== 安装免授权助手：将执行的特权命令（仅打印）===")
+        pr("=== Установка помощника: план команд с правами администратора (без выполнения)===")
         if let src = HelperChannel.binarySource {
             let staged = (helper: K.appSupport + "/install/autoz-helper",
                           plist: K.appSupport + "/install/\(HelperK.label).plist")
-            pr("① 非特权步骤（落到用户目录）")
+            pr("① Без прав администратора (каталог пользователя)")
             pr("  cp \(src) → \(staged.helper)")
-            pr("  写 \(staged.plist)（allow-uid=\(getuid())）")
-            pr("② 特权步骤（一次授权）")
+            pr("  Записать \(staged.plist) (allow-uid=\(getuid()))")
+            pr("② С правами администратора (один запрос пароля)")
             for (i, s) in HelperInstaller.installSteps(staged: staged).enumerated() {
                 pr("  \(i + 1). \(s.display)\(s.note.map { "   ← \($0)" } ?? "")")
             }
         } else {
-            pr("找不到 autoz-helper，请先 ./build.sh")
+            pr("autoz-helper не найден. Выполните ./build.sh")
         }
         pr("")
-        pr("=== 卸载：将执行的特权命令（仅打印）===")
+        pr("=== Удаление: план команд с правами администратора (без выполнения)===")
         for (i, s) in HelperInstaller.uninstallSteps().enumerated() {
             pr("  \(i + 1). \(s.display)\(s.note.map { "   ← \($0)" } ?? "")")
         }
         pr("")
-        pr("卸载只会动这三个白名单路径：")
+        pr("Удаление затрагивает только три разрешённых пути:")
         for p in HelperInstaller.removablePaths { pr("  \(p)") }
         return 0
 
     case "--helper-install":
         let r = HelperInstaller.install()
-        pr(r.ok ? "OK: \(r.text)" : "未完成: \(r.text)")
+        pr(r.ok ? "OK: \(r.text)" : "Не завершено: \(r.text)")
         return r.ok ? 0 : 4
 
     case "--helper-uninstall":
         let r = HelperInstaller.uninstall()
-        pr(r.ok ? "OK: \(r.text)" : "未完成: \(r.text)")
+        pr(r.ok ? "OK: \(r.text)" : "Не завершено: \(r.text)")
         return r.ok ? 0 : 4
 
     case "--login-status":
-        pr("开机自启: \(LoginItem.statusText)")
-        pr("  配置文件: \(LoginItem.plistURL.path)\(LoginItem.isEnabled ? "" : "（不存在）")")
-        pr("  当前 App: \(Bundle.main.bundlePath)")
-        pr("  生效时机: 下次登录（launchd 只在登录时读取 LaunchAgents）")
-        pr("  撤销方式: AutoZ --login-disable，或「系统设置 → 通用 → 登录项」")
+        pr("Автозапуск: \(LoginItem.statusText)")
+        pr("  Файл настроек: \(LoginItem.plistURL.path)\(LoginItem.isEnabled ? "" : "(отсутствует)")")
+        pr("  Приложение: \(Bundle.main.bundlePath)")
+        pr("  Применение: при следующем входе в систему (launchd читает LaunchAgents при входе)")
+        pr("  Отключение: AutoZ --login-disable или «Системные настройки → Основные → Объекты входа»")
         return 0
 
     // 注意：args 是去掉程序名之后的参数，单参数的开关里**不能**写 args[1]，会越界崩溃。
     // 所以这里拆成两个 case，而不是合并后用 args[1] 判断。
     case "--login-enable":
         if let err = LoginItem.set(true) {
-            pr("开启开机自启失败: \(err)")
+            pr("Не удалось включить автозапуск: \(err)")
             return 4
         }
-        pr("OK: 开机自启 → \(LoginItem.statusText)")
+        pr("OK: Автозапуск → \(LoginItem.statusText)")
         return 0
 
     case "--login-disable":
         if let err = LoginItem.set(false) {
-            pr("关闭开机自启失败: \(err)")
+            pr("Не удалось выключить автозапуск: \(err)")
             return 4
         }
-        pr("OK: 开机自启 → \(LoginItem.statusText)")
+        pr("OK: Автозапуск → \(LoginItem.statusText)")
         return 0
 
     case "--notify-status":
         pr("bundle id: \(bundleID)")
-        pr("通知通道: 程序内自绘横幅（ToastCenter，见 Sources/ui.swift）")
-        pr("  · 不使用 osascript，也不依赖系统通知权限")
-        pr("  · 触发时机：同步成功/失败、恢复、助手安装/卸载")
-        pr("  · 想看实际效果：GUI 里用「更多 ▸ 测试通知」，或直接跑 --notify-test")
-        pr("  · 历史记录：~/Library/Logs/AutoZ.log（无论有没有 GUI 都会记录）")
+        pr("Уведомления: баннеры приложения (ToastCenter, см. Sources/ui.swift)")
+        pr("  · Без osascript и системных разрешений на уведомления")
+        pr("  · События: результат синхронизации, возврат пояса, установка/удаление помощника")
+        pr("  · Проверка: «Настройки → Диагностика → Проверить уведомления» или --notify-test")
+        pr("  · История: ~/Library/Logs/AutoZ.log (в том числе без интерфейса)")
         return 0
 
     case "--backend":
         guard args.count > 1, let b = PrivBackend(rawValue: args[1]) else {
-            pr("用法: AutoZ --backend helper|native|appleScript"); return 1
+            pr("Использование: AutoZ --backend helper|native|appleScript"); return 1
         }
         Store.shared.privBackend = b
-        pr("改时区通道已设为: \(b.label)")
+        pr("Способ смены пояса: \(b.label)")
         return 0
 
     case "--version":
@@ -2447,32 +2397,32 @@ func runCLI(_ args: [String]) -> Int32 {
 
     default:
         pr("""
-        AutoZ \(K.version) — \(appDisplayName)（\(appTagline)）
+        AutoZ \(K.version) — \(appDisplayName) (\(appTagline))
 
-        用法:
-          AutoZ                  启动菜单栏程序（无参数）
-          AutoZ --check          仅查询出口 IP 与对应时区，不修改系统
-          AutoZ --apply          查询 + 设置系统时区（优先免授权助手）
-          AutoZ --set <zone>     直接设置指定 IANA 时区
-          AutoZ --system         打印当前系统时区与自动时区开关
-          AutoZ --format         打印继承到的时间格式与东八区渲染结果
-          AutoZ --menu           打印菜单结构（数据驱动模型渲染成文本，便于审查）
-          AutoZ --tz-selftest    自测时区标识与当地时间渲染（固定时间戳断言，不碰系统）
-          AutoZ --plan [zone]    打印三条通道将执行的命令（不执行，供审查）
-          AutoZ --backend <b>    切换改时区通道：helper | native | appleScript
-          AutoZ --notify-status  查看通知通道说明
-          AutoZ --notify-test    测试通知横幅（自绘，需 GUI 在运行）
-          AutoZ --login-status   查看开机自启状态
-          AutoZ --login-enable   开启开机自启（App 需已在 /Applications）
-          AutoZ --login-disable  关闭开机自启
-          AutoZ --icon-preview <png> <size>  导出程序图标预览（调试外观用）
+        Использование:
+          AutoZ                  Запустить часы в строке меню
+          AutoZ --check          Определить внешний IP и пояс, не меняя систему
+          AutoZ --apply          Определить и применить часовой пояс по IP
+          AutoZ --set <zone>     Установить пояс IANA (например, Europe/Moscow)
+          AutoZ --system         Показать системный пояс и автовыбор пояса
+          AutoZ --format         Показать формат и текст часов UTC+8
+          AutoZ --menu           Показать структуру меню
+          AutoZ --tz-selftest    Проверить часовые пояса и русский интерфейс без изменения системы
+          AutoZ --plan [zone]    Показать план смены пояса без выполнения
+          AutoZ --backend <b>    Способ авторизации: helper | native | appleScript
+          AutoZ --notify-status  Сведения об уведомлениях
+          AutoZ --notify-test    Проверить уведомления
+          AutoZ --login-status   Состояние автозапуска
+          AutoZ --login-enable   Включить автозапуск (из /Applications)
+          AutoZ --login-disable  Выключить автозапуск
+          AutoZ --icon-preview <png> <size>  Экспортировать значок
 
-        免授权助手（装一次，以后改时区零弹窗）:
-          AutoZ --helper-status     查看助手状态与 ping 结果
-          AutoZ --helper-plan       打印安装/卸载将执行的特权命令（不执行）
-          AutoZ --helper-install    安装（弹一次管理员授权）
-          AutoZ --helper-uninstall  卸载（弹一次管理员授权）
-          autoz-helper --selftest    助手自测（11 项协议与安全用例，全部 dry-run，无需 root）
+        Помощник (после установки смена пояса без запроса пароля):
+          AutoZ --helper-status     Состояние помощника и ping
+          AutoZ --helper-plan       План установки/удаления без выполнения
+          AutoZ --helper-install    Установить (один запрос пароля администратора)
+          AutoZ --helper-uninstall  Удалить (один запрос пароля администратора)
+          autoz-helper --selftest    11 проверок протокола и безопасности без изменения системы
         """)
         return 0
     }
@@ -2499,7 +2449,7 @@ func snapshotAllSections(into dir: String) {
     let names = ["01-sync", "02-menubar", "03-login", "04-backend", "05-maintenance", "06-about"]
     func shoot(_ i: Int) {
         guard i < names.count else {
-            log("自检：六个分区截图完成 → \(dir)")
+            log("Проверка: снимки шести разделов сохранены → \(dir)")
             return
         }
         AdvancedWindowController.shared.selectSectionForProbe(i)
@@ -2517,23 +2467,23 @@ func snapshotAllSections(into dir: String) {
 /// 窗口在别的桌面时截到的是壁纸。离屏渲染两者都不需要。
 func snapshotConsole(to path: String) {
     guard let w = AdvancedWindowController.shared.window, let v = w.contentView else {
-        log("自检：截图失败 —— 窗口不存在")
+        log("Снимок не создан: окно отсутствует")
         return
     }
     guard let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else {
-        log("自检：截图失败 —— 无法创建位图")
+        log("Снимок не создан: ошибка создания изображения")
         return
     }
     v.cacheDisplay(in: v.bounds, to: rep)
     guard let data = rep.representation(using: .png, properties: [:]) else {
-        log("自检：截图失败 —— PNG 编码失败")
+        log("Снимок не создан: ошибка кодирования PNG")
         return
     }
     do {
         try data.write(to: URL(fileURLWithPath: path))
-        log("自检：窗口已离屏截图 → \(path) （\(rep.pixelsWide)×\(rep.pixelsHigh)）")
+        log("Снимок окна сохранён → \(path)  (\(rep.pixelsWide)×\(rep.pixelsHigh))")
     } catch {
-        log("自检：截图写入失败 \(error.localizedDescription)")
+        log("Ошибка сохранения снимка: \(error.localizedDescription)")
     }
 }
 
@@ -2544,8 +2494,8 @@ func snapshotConsole(to path: String) {
 extension AppDelegate: AutoZActions {
 
     func azToggleSync()      { toggleSync(NSMenuItem()) }
-    func azCheckAndSync()    { store.lastAction = "立即检查并同步"; perform(apply: true) }
-    func azCheckOnly()       { store.lastAction = "仅查询"; perform(apply: false) }
+    func azCheckAndSync()    { store.lastAction = "Проверить и синхронизировать"; perform(apply: true) }
+    func azCheckOnly()       { store.lastAction = "Только проверить"; perform(apply: false) }
     func azRestoreHome()     { restoreHome(NSMenuItem()) }
     func azSetHomeZone(_ id: String) { setHomeZone(id) }
 
@@ -2565,11 +2515,11 @@ extension AppDelegate: AutoZActions {
     /// 否则用户在「系统设置」里手动改掉之后就对不上了。
     func azSetLaunchAtLogin(_ on: Bool) {
         if let err = LoginItem.set(on) {
-            log("开机自启\(on ? "开启" : "关闭")失败：\(err)")
-            notify(title: "开机自启设置失败", message: err, sound: "Basso")
+            log("Не удалось изменить автозапуск (\(on ? "вкл." : "выкл.")): \(err)")
+            notify(title: "АвтозапускОшибка установки пояса", message: err, sound: "Basso")
         } else {
-            log("开机自启 → \(LoginItem.statusText)")
-            notify(title: on ? "已开启开机自启" : "已关闭开机自启", message: LoginItem.statusText)
+            log("Автозапуск → \(LoginItem.statusText)")
+            notify(title: on ? "Автозапуск включён" : "Автозапуск выключен", message: LoginItem.statusText)
         }
         refresh()
     }
@@ -2579,7 +2529,7 @@ extension AppDelegate: AutoZActions {
 
     func azSetBackend(_ backend: PrivBackend) {
         store.privBackend = backend
-        log("改时区通道 → \(backend.rawValue)")
+        log("Способ смены пояса → \(backend.rawValue)")
         refresh()
     }
 
